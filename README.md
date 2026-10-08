@@ -30,7 +30,7 @@ This starter is for ML engineers or data scientists who want to collect and anal
 
 **Not a good fit for:**
 - Non-Tesla owners (you need a Tesla vehicle and a Tesla account)
-- Quick experiments (setup takes ~10 minutes and costs ~$8/month; for one-off analysis, export TeslaMate data manually)
+- Quick experiments (setup takes ~10 minutes and costs ~$16/month; for one-off analysis, export TeslaMate data manually)
 - Production fleets or commercial use (this is designed for personal use; scaling to many vehicles requires Fleet Telemetry setup)
 
 **Long-term goal**: After collecting months of driving data, train an XGBoost regression model to predict energy consumption (Wh/mi) from features like distance, speed, temperature, elevation change, and HVAC usage. Deploy the model to a SageMaker endpoint and monitor for seasonal drift with Model Monitor. The ML pipeline (phase 2+) is not yet implemented.
@@ -42,7 +42,7 @@ This starter is for ML engineers or data scientists who want to collect and anal
 - **Nightly Parquet exports** to S3, partitioned by date, idempotent and tested
 - **Automated backups** with daily PostgreSQL dumps to S3 and EBS snapshots via Data Lifecycle Manager
 - **AWS Glue Data Catalog** and Athena workgroup for SQL exploration
-- **Cost-effective**: ~$8/month on-demand (see [Cost Estimate](#cost-estimate))
+- **Cost-effective**: ~$16/month on-demand (see [Cost Estimate](#cost-estimate))
 - **CI/CD ready** with GitHub Actions for Terraform validation, Python linting, and automated testing
 
 ## Architecture
@@ -304,18 +304,17 @@ gunzip < /tmp/teslamate_YYYY-MM-DD.sql.gz | \
 
 ### Step 8: Clean Up Resources
 
-To avoid ongoing charges:
+To avoid ongoing charges, destroy the infrastructure:
 
 ```bash
-# Stop the EC2 instance (cheapest option while preserving data)
-aws ec2 stop-instances --instance-ids $INSTANCE_ID --region us-east-1
-
-# Or destroy everything (deletes all data)
+# Destroy everything (deletes all data)
 cd infra
 terraform destroy  # Type 'yes' when prompted
 ```
 
-**Note:** S3 lifecycle policies will archive old data to Infrequent Access (90 days) and expire backups (30 days) automatically. You only pay for storage when stopped.
+**Important:** TeslaMate must run continuously to detect and record drives. Stopping the EC2 instance will prevent data collection, causing you to lose driving and charging events. If you need to pause data collection temporarily (e.g., selling the car), use `terraform destroy` and redeploy later.
+
+**Note:** S3 lifecycle policies automatically archive old data to Infrequent Access (90 days) and expire backups (30 days).
 
 ## Project Structure
 
@@ -377,14 +376,17 @@ Running this infrastructure 24/7 in **us-east-1** (October 2026 pricing):
 
 ### Cost Optimization
 
-Reduce costs by 50-70%:
+Reduce monthly costs while maintaining continuous data collection:
 
-1. **Stop EC2 when not driving** (vacation, weekends): Saves $12.41/month per stopped month. EBS and S3 charges continue.
-2. **Use a Savings Plan or Reserved Instance**: 1-year commitment reduces EC2 to ~$7.30/month (40% savings).
-3. **Reduce backup retention**: Change `backup_retention_days` from 30 to 7 days in `terraform.tfvars`.
-4. **Archive old data faster**: Change `data_lifecycle_days` from 90 to 30 days to move exports to S3 IA sooner.
+1. **Use a Savings Plan or Reserved Instance**: 1-year commitment reduces t4g.small EC2 cost from $12.41 to ~$7.30/month (40% savings). 3-year commitment: ~$4.80/month (60% savings).
+2. **Switch to t4g.micro** ($6.20/month, 50% cheaper): Adequate for single-vehicle TeslaMate if memory usage stays under 1 GB. Monitor with CloudWatch; if PostgreSQL or TeslaMate crashes due to OOM, upgrade back to t4g.small.
+3. **Reduce backup retention**: Change `backup_retention_days` from 30 to 7 days in `terraform.tfvars` and `terraform apply`. Reduces S3 storage by ~75% (~$0.09/month savings).
+4. **Reduce snapshot retention**: Edit the DLM policy retain_rule in `infra/ec2.tf` from 7 to 3 days, then `terraform apply`. Saves ~$0.80/month.
+5. **Archive old exports faster**: Change `data_lifecycle_days` from 90 to 30 days to transition Parquet files to S3 IA sooner (~$0.05/month savings after 90 days).
 
-**Minimal cost while stopped:** ~$4/month (EBS, snapshots, S3)
+**Tradeoffs:**
+- Shorter retention: Less recovery window if you need to restore old data
+- t4g.micro: May run out of memory with heavy Grafana dashboard use or large databases (multiple vehicles, years of data)
 
 ### Free Tier Eligibility
 

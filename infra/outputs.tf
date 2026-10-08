@@ -21,7 +21,7 @@ output "athena_workgroup" {
 output "ssm_parameters" {
   description = "SSM Parameter Store paths for secrets"
   value = {
-    encryption_key   = aws_ssm_parameter.teslamate_encryption_key.name
+    encryption_key    = aws_ssm_parameter.teslamate_encryption_key.name
     postgres_password = aws_ssm_parameter.postgres_password.name
     grafana_password  = aws_ssm_parameter.grafana_admin_password.name
   }
@@ -29,7 +29,7 @@ output "ssm_parameters" {
 
 output "connect_command" {
   description = "AWS CLI commands to connect to TeslaMate and Grafana"
-  value = <<-EOT
+  value       = <<-EOT
     # Connect to TeslaMate UI (port 4000):
     aws ssm start-session --target ${aws_instance.teslamate.id} --document-name AWS-StartPortForwardingSession --parameters "portNumber=4000,localPortNumber=4000" --region ${var.aws_region}
     # Then open: http://localhost:4000

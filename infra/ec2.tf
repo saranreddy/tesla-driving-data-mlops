@@ -16,12 +16,12 @@ resource "aws_instance" "teslamate" {
   }
 
   user_data = templatefile("${path.module}/user_data.sh", {
-    aws_region      = var.aws_region
-    project_name    = var.project_name
-    s3_bucket       = aws_s3_bucket.data.id
-    encryption_key  = aws_ssm_parameter.teslamate_encryption_key.name
-    postgres_pass   = aws_ssm_parameter.postgres_password.name
-    grafana_pass    = aws_ssm_parameter.grafana_admin_password.name
+    aws_region     = var.aws_region
+    project_name   = var.project_name
+    s3_bucket      = aws_s3_bucket.data.id
+    encryption_key = aws_ssm_parameter.teslamate_encryption_key.name
+    postgres_pass  = aws_ssm_parameter.postgres_password.name
+    grafana_pass   = aws_ssm_parameter.grafana_admin_password.name
   })
 
   metadata_options {
@@ -42,10 +42,10 @@ resource "aws_instance" "teslamate" {
   ]
 }
 
-resource "aws_ebs_snapshot_lifecycle_policy" "teslamate_daily" {
-  description            = "Daily snapshots of TeslaMate EBS volume"
-  execution_role_arn     = aws_iam_role.dlm.arn
-  state                  = "ENABLED"
+resource "aws_dlm_lifecycle_policy" "teslamate_daily" {
+  description        = "Daily snapshots of TeslaMate EBS volume"
+  execution_role_arn = aws_iam_role.dlm.arn
+  state              = "ENABLED"
 
   policy_details {
     resource_types = ["VOLUME"]

@@ -15,12 +15,12 @@ resource "aws_glue_catalog_table" "drives" {
   table_type = "EXTERNAL_TABLE"
 
   parameters = {
-    "EXTERNAL"              = "TRUE"
-    "parquet.compression"   = "SNAPPY"
-    "projection.enabled"    = "true"
-    "projection.date.type"  = "date"
-    "projection.date.range" = "2024-01-01,NOW"
-    "projection.date.format" = "yyyy-MM-dd"
+    "EXTERNAL"                  = "TRUE"
+    "parquet.compression"       = "SNAPPY"
+    "projection.enabled"        = "true"
+    "projection.date.type"      = "date"
+    "projection.date.range"     = "2024-01-01,NOW"
+    "projection.date.format"    = "yyyy-MM-dd"
     "storage.location.template" = "s3://${aws_s3_bucket.data.id}/raw/drives/date=$${date}/"
   }
 
@@ -127,12 +127,12 @@ resource "aws_glue_catalog_table" "charges" {
   table_type = "EXTERNAL_TABLE"
 
   parameters = {
-    "EXTERNAL"              = "TRUE"
-    "parquet.compression"   = "SNAPPY"
-    "projection.enabled"    = "true"
-    "projection.date.type"  = "date"
-    "projection.date.range" = "2024-01-01,NOW"
-    "projection.date.format" = "yyyy-MM-dd"
+    "EXTERNAL"                  = "TRUE"
+    "parquet.compression"       = "SNAPPY"
+    "projection.enabled"        = "true"
+    "projection.date.type"      = "date"
+    "projection.date.range"     = "2024-01-01,NOW"
+    "projection.date.format"    = "yyyy-MM-dd"
     "storage.location.template" = "s3://${aws_s3_bucket.data.id}/raw/charges/date=$${date}/"
   }
 
