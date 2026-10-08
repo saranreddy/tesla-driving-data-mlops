@@ -7,6 +7,53 @@ on:
     branches: [ main ]
 
 jobs:
+  secret-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Scan for secrets
+        run: |
+          echo "Scanning for accidentally committed credentials..."
+          
+          # Check for AWS access keys (AKIA...)
+          if grep -r "AKIA[0-9A-Z]\{16\}" . --exclude-dir=.git --exclude-dir=.terraform --exclude="ci.yml" 2>/dev/null; then
+            echo "❌ ERROR: AWS access key detected"
+            exit 1
+          fi
+          
+          # Check for private keys (exclude this CI file to avoid self-match)
+          if grep -r "BEGIN.*PRIVATE KEY" . --exclude-dir=.git --exclude-dir=.terraform --exclude="ci.yml" 2>/dev/null; then
+            echo "❌ ERROR: Private key detected"
+            exit 1
+          fi
+          
+          # Check for hardcoded passwords or secrets (common patterns)
+          if grep -rE "(password|secret|token)\s*[:=]\s*['\"][^'\"]{20,}" . \
+             --include="*.tf" --include="*.py" --include="*.sh" --include="*.yml" --include="*.yaml" \
+             --exclude-dir=.git --exclude-dir=.terraform 2>/dev/null | \
+             grep -vE "(random_password|SecureString|POSTGRES_PASSWORD|GRAFANA_ADMIN|ENCRYPTION_KEY|\$\{|Parameter Store)"; then
+            echo "❌ ERROR: Potential hardcoded secret detected"
+            exit 1
+          fi
+          
+          # Check for .tfstate files
+          if find . -name "*.tfstate*" -not -path "./.git/*" -not -path "./.terraform/*" | grep -q .; then
+            echo "❌ ERROR: Terraform state file detected in repository"
+            exit 1
+          fi
+          
+          # Check for .env files
+          if find . -name ".env*" -not -path "./.git/*" -not -name ".env.example" | grep -q .; then
+            echo "❌ ERROR: Environment file (.env) detected in repository"
+            exit 1
+          fi
+          
+          echo "✅ No secrets detected"
+
   terraform:
     name: Terraform Validate
     runs-on: ubuntu-latest

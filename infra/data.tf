@@ -27,3 +27,34 @@ data "aws_ami" "ubuntu" {
     values = [local.architecture]
   }
 }
+
+# Look up (do not manage) the account's default VPC. Using a data source instead of
+# aws_default_vpc avoids Terraform adopting and re-tagging a pre-existing, shared VPC.
+data "aws_vpc" "default" {
+  default = true
+}
+
+# AZs that actually offer the chosen instance type (e.g. t4g.* is not offered in us-east-1e)
+data "aws_ec2_instance_type_offerings" "supported" {
+  location_type = "availability-zone"
+  filter {
+    name   = "instance-type"
+    values = [var.instance_type]
+  }
+}
+
+# Default subnets in the default VPC, restricted to AZs that support the instance type
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+  filter {
+    name   = "default-for-az"
+    values = ["true"]
+  }
+  filter {
+    name   = "availability-zone"
+    values = data.aws_ec2_instance_type_offerings.supported.locations
+  }
+}

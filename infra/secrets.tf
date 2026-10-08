@@ -5,12 +5,12 @@ resource "random_password" "teslamate_encryption_key" {
 
 resource "random_password" "postgres_password" {
   length  = 32
-  special = true
+  special = false # alphanumeric only: value is embedded in .env, shell, and systemd unit files
 }
 
 resource "random_password" "grafana_admin_password" {
   length  = 24
-  special = true
+  special = false # alphanumeric only: value is embedded in .env, shell, and systemd unit files
 }
 
 resource "aws_ssm_parameter" "teslamate_encryption_key" {

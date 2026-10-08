@@ -1,7 +1,7 @@
 resource "aws_security_group" "teslamate" {
   name        = "${var.project_name}-sg"
   description = "Security group for TeslaMate EC2 instance - no public inbound access"
-  vpc_id      = aws_default_vpc.default.id
+  vpc_id      = data.aws_vpc.default.id
 
   egress {
     description = "Allow all outbound traffic"
@@ -13,11 +13,5 @@ resource "aws_security_group" "teslamate" {
 
   tags = {
     Name = "TeslaMate Security Group"
-  }
-}
-
-resource "aws_default_vpc" "default" {
-  tags = {
-    Name = "Default VPC"
   }
 }

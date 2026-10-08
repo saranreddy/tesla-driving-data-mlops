@@ -10,15 +10,18 @@ log() {
 log "Starting TeslaMate setup..."
 
 log "Installing system dependencies..."
-apt-get update
-apt-get install -y \
+# DPkg::Lock::Timeout=600 prevents failures when unattended-upgrades holds the lock
+apt-get -o DPkg::Lock::Timeout=600 update
+apt-get -o DPkg::Lock::Timeout=600 install -y \
   docker.io \
-  docker-compose \
-  awscli \
+  docker-compose-v2 \
+  curl \
   python3-pip \
   python3-venv \
   postgresql-client \
   unzip
+# Note: Ubuntu 24.04 has no `awscli` apt package; AWS CLI v2 is installed separately below.
+# Note: `curl` is required for the AWS CLI v2 installer.
 
 systemctl enable docker
 systemctl start docker
@@ -26,12 +29,12 @@ systemctl start docker
 usermod -aG docker ubuntu
 
 log "Installing AWS CLI v2..."
-curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "/tmp/awscliv2.zip"
+curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "/tmp/awscliv2.zip"
 unzip -q /tmp/awscliv2.zip -d /tmp
 /tmp/aws/install
 rm -rf /tmp/aws /tmp/awscliv2.zip
 
-log "Creating 2 GB swap file for t4g.micro (1 GB RAM)..."
+log "Creating 2 GB swap file (1 GB RAM instances)..."
 fallocate -l 2G /swapfile
 chmod 600 /swapfile
 mkswap /swapfile
@@ -84,6 +87,8 @@ services:
       - POSTGRES_USER=teslamate
       - POSTGRES_PASSWORD=$${POSTGRES_PASSWORD}
       - POSTGRES_DB=teslamate
+    ports:
+      - 127.0.0.1:5432:5432
     mem_limit: 384m
     mem_reservation: 256m
     volumes:
@@ -127,21 +132,21 @@ COMPOSE_EOF
 
 log "Creating environment file with secrets..."
 cat > /opt/teslamate/.env <<ENV_EOF
-TESLAMATE_ENCRYPTION_KEY=$ENCRYPTION_KEY
-POSTGRES_PASSWORD=$POSTGRES_PASSWORD
-GRAFANA_ADMIN_PASSWORD=$GRAFANA_ADMIN_PASSWORD
+TESLAMATE_ENCRYPTION_KEY='$ENCRYPTION_KEY'
+POSTGRES_PASSWORD='$POSTGRES_PASSWORD'
+GRAFANA_ADMIN_PASSWORD='$GRAFANA_ADMIN_PASSWORD'
 ENV_EOF
 
 chmod 600 /opt/teslamate/.env
 
 log "Starting TeslaMate services..."
 cd /opt/teslamate
-docker-compose up -d
+docker compose up -d
 
 log "Installing Python dependencies for export script..."
 python3 -m venv /opt/teslamate/venv
 /opt/teslamate/venv/bin/pip install --upgrade pip
-/opt/teslamate/venv/bin/pip install psycopg2-binary pandas pyarrow boto3
+/opt/teslamate/venv/bin/pip install psycopg2-binary pandas pyarrow boto3 s3fs
 
 log "Creating export script..."
 cat > /opt/teslamate/export_parquet.py <<'EXPORT_SCRIPT'
@@ -342,7 +347,6 @@ cat > /etc/systemd/system/teslamate-export.timer <<TIMER_EOF
 Description=Nightly TeslaMate data export timer
 
 [Timer]
-OnCalendar=daily
 OnCalendar=02:00
 Persistent=true
 
@@ -396,7 +400,6 @@ cat > /etc/systemd/system/teslamate-backup.timer <<BACKUP_TIMER_EOF
 Description=Daily TeslaMate database backup timer
 
 [Timer]
-OnCalendar=daily
 OnCalendar=01:00
 Persistent=true
 

@@ -37,7 +37,7 @@ This starter is for ML engineers or data scientists who want to collect and anal
 
 ## Features
 
-- **Self-hosted TeslaMate** on AWS EC2 (t3.micro x86_64, 1 GB RAM + 2 GB swap, free-tier eligible for all accounts)
+- **Self-hosted TeslaMate** on AWS EC2 (t3.micro, 1 GB RAM + 2 GB swap, free-tier eligible for all accounts; Ubuntu 24.04 LTS, arm64/x86_64 auto-selected)
 - **Secure-by-default infrastructure** with Terraform: no public inbound ports, SSM Session Manager access, encrypted EBS, secrets in SSM Parameter Store
 - **Memory-optimized for 1 GB RAM**: PostgreSQL tuning, container limits, swap file, Grafana caching
 - **Nightly Parquet exports** to S3, partitioned by date, idempotent and tested
@@ -51,6 +51,8 @@ This starter is for ML engineers or data scientists who want to collect and anal
 ![AWS Architecture Diagram for Tesla Driving Data MLOps](docs/architecture.png)
 
 *Diagram generated from `docs/architecture.py` (requires `pip install diagrams` and Graphviz; run `python docs/architecture.py` to regenerate `architecture.png` in the same directory)*
+
+**Current Status:** Phase 1 deployed to production (October 2026). Phases 2-5 are planned for future implementation as data accumulates.
 
 ### Phase Status
 
@@ -121,7 +123,7 @@ terraform apply
 ```
 
 Terraform creates:
-- **EC2 instance** (t3.micro x86_64, 1 GB RAM + 2 GB swap, free-tier eligible for all accounts) running TeslaMate Docker Compose stack
+- **EC2 instance** (t3.micro, 1 GB RAM + 2 GB swap, free-tier eligible for all accounts; Ubuntu 24.04 LTS, arm64/x86_64 auto-selected) running TeslaMate Docker Compose stack
 - **S3 bucket** (versioning, encryption, lifecycle policies) for Parquet exports and backups
 - **SSM Parameter Store** (SecureString) for TeslaMate encryption key, PostgreSQL password, Grafana admin password
 - **IAM role** (least-privilege) for EC2 instance with S3 and SSM access
@@ -170,6 +172,21 @@ TeslaMate will prompt you to sign in with your Tesla account. Follow the on-scre
 3. Complete the Tesla authentication flow
 4. TeslaMate will store encrypted tokens in the database (using the `ENCRYPTION_KEY` from SSM)
 
+**Alternative: Generate Tesla tokens on macOS with `tesla_auth`**
+
+If the TeslaMate web flow doesn't work, use [`tesla_auth`](https://github.com/adriankumpf/tesla_auth) to generate tokens locally:
+
+```bash
+# Download the macOS binary from https://github.com/adriankumpf/tesla_auth/releases
+# Remove macOS quarantine attribute (required for unsigned binaries)
+xattr -d com.apple.quarantine tesla_auth_macos
+
+# Run to get access/refresh tokens
+./tesla_auth_macos
+
+# Copy the tokens and paste them into TeslaMate's settings UI
+```
+
 After sign-in, TeslaMate immediately starts polling your Tesla for vehicle state and recording drives.
 
 ### Step 4: (Optional) Connect to Grafana Dashboards
@@ -188,6 +205,8 @@ aws ssm start-session \
   --region us-east-1
 ```
 
+**Note:** If your local port 3000 is already in use (e.g., by Docker Desktop), forward to a different port: change `localPortNumber=3000` to `localPortNumber=3003` (or any available port) and open `http://localhost:3003` instead.
+
 Open your browser to **http://localhost:3000**
 
 - **Username:** `admin`
@@ -201,6 +220,8 @@ aws ssm get-parameter \
   --output text \
   --region us-east-1
 ```
+
+**Note:** The `teslamate/grafana` Docker image disables Grafana API basic auth. You must log in via the web UI form; `curl -u admin:PASSWORD` will return 401.
 
 Explore the pre-configured dashboards: Drives, Charges, Efficiency, etc.
 
@@ -303,6 +324,23 @@ gunzip < /tmp/teslamate_YYYY-MM-DD.sql.gz | \
   docker exec -i teslamate-database-1 psql -U teslamate -d teslamate
 ```
 
+**To deliberately rebuild the EC2 instance:**
+
+The Terraform lifecycle policy protects the live instance from accidental replacement when the AMI updates or user_data changes. If you need to rebuild the instance (e.g., to apply user_data changes), back up first, then:
+
+```bash
+# 1. Verify daily backups are recent
+aws s3 ls s3://$S3_BUCKET/backups/
+
+# 2. Manually trigger replacement (will destroy and recreate the instance)
+cd infra
+terraform apply -replace=aws_instance.teslamate
+
+# 3. Restore from the most recent backup if needed (see above)
+```
+
+**Note:** `terraform destroy` removes the EC2 instance and EBS volume. Daily PostgreSQL backups in S3 and DLM EBS snapshots outlive destroy unless you separately delete them. S3 lifecycle policies automatically expire backups older than 30 days.
+
 ### Step 8: Clean Up Resources
 
 To avoid ongoing charges, destroy the infrastructure:
@@ -400,7 +438,7 @@ aws ec2 describe-instance-types \
 - **This repo's default (t3.micro)**: ✅ **Covered by free tier**
 
 **What's FREE (within 750 hours/month)**:
-- EC2 t3.micro (1 GB RAM, x86): Up to 750 hours/month (covers 24/7 single instance)
+- EC2 t3.micro (1 GB RAM, x86_64): Up to 750 hours/month (covers 24/7 single instance)
 - EBS: 30 GB gp2/gp3 storage
 - Always-free services: Glue Data Catalog (1M objects), Athena (10 TB scanned/month), SSM Session Manager
 
@@ -426,7 +464,7 @@ If you're outside free tier (account >12 months old for pre-2025, or >6 months f
 
 | Service | Configuration | Monthly Cost |
 |---------|--------------|--------------|
-| **EC2 t3.micro** | 730 hours/month on-demand (1 GB RAM, x86) | **$8.30** |
+| **EC2 t3.micro** | 730 hours/month on-demand (1 GB RAM, x86_64) | **$8.30** |
 | **EC2 t4g.micro (ARM alternative)** | 730 hours/month on-demand (1 GB RAM) | **$6.20** (25% cheaper) |
 | **EBS gp3** | 30 GB storage | **$2.40** |
 | **EBS Snapshots** | 7 daily snapshots × 30 GB | **$1.40** |
@@ -542,7 +580,7 @@ sudo systemctl restart teslamate-export.timer
 3. Verify Docker containers: `sudo docker ps`
 4. Expected containers: `teslamate`, `database`, `grafana`, `mosquitto` (all should show `Up`)
 
-TeslaMate takes ~2-3 minutes to start after instance boot. If containers are not running, check `sudo docker-compose -f /opt/teslamate/docker-compose.yml logs`.
+TeslaMate takes ~2-3 minutes to start after instance boot. If containers are not running, check `sudo docker compose -f /opt/teslamate/docker-compose.yml logs`.
 
 ### 4. No Data in S3 After Export
 
@@ -558,8 +596,8 @@ TeslaMate takes ~2-3 minutes to start after instance boot. If containers are not
 
 **Error:** `No AMI matching filters` during `terraform plan` or `apply`.
 
-**Fix:** The AMI filter in `infra/data.tf` looks for Ubuntu 24.04 ARM64 images. If unavailable in your region:
-1. Search for Ubuntu ARM64 AMIs: `aws ec2 describe-images --owners 099720109477 --filters "Name=name,Values=ubuntu/images/hvm-ssd-gp3/ubuntu-*-arm64-server-*" --region YOUR_REGION`
+**Fix:** The AMI filter in `infra/data.tf` looks for Ubuntu 24.04 images matching your instance type architecture (arm64 for t4g.*, x86_64 for t3.*). If unavailable in your region:
+1. Search for Ubuntu AMIs: `aws ec2 describe-images --owners 099720109477 --filters "Name=name,Values=ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-*-server-*" --region YOUR_REGION`
 2. Update `infra/data.tf` with a valid AMI name pattern or AMI ID
 
 ### 6. High S3 Costs
@@ -617,7 +655,7 @@ journalctl -u docker | grep -i "oom"
 3. **Restart containers to clear memory**:
    ```bash
    cd /opt/teslamate
-   docker-compose restart
+   docker compose restart
    ```
 
 4. **Upgrade to t4g.small** (2 GB RAM, $12.41/month):
@@ -637,24 +675,33 @@ For detailed failure modes, see [Common Failure Modes](#common-failure-modes) ab
 Additional debugging tips:
 
 - **EC2 instance issues:** Check CloudWatch Logs or SSH via SSM to view `/var/log/teslamate-setup.log`
-- **Docker container crashes:** `sudo docker-compose -f /opt/teslamate/docker-compose.yml logs --tail 100`
+- **Docker container crashes:** `sudo docker compose -f /opt/teslamate/docker-compose.yml logs --tail 100`
 - **Database connection errors:** Verify PostgreSQL is running: `sudo docker exec teslamate-database-1 pg_isready -U teslamate`
 - **SSM connection refused:** Ensure the instance has `AmazonSSMManagedInstanceCore` policy (provided by Terraform IAM role)
 - **Athena query failures:** Check the Glue table schema matches the Parquet file schema: `aws glue get-table --database-name teslamate_mlops_data --name drives`
 
-## Security Notes
+## Security
 
-This repository follows AWS security best practices:
+### Credential Management
+
+**No credentials are stored in this repository.** All secrets are generated at deployment time and stored securely:
+
+- **Passwords & encryption keys**: Generated by Terraform `random_password` resources, stored in AWS Systems Manager Parameter Store as SecureString parameters (AES-256 encrypted at rest)
+- **Tesla OAuth tokens**: Generated during TeslaMate sign-in flow, stored encrypted in the PostgreSQL database on the EC2 instance using the `ENCRYPTION_KEY` from SSM
+- **AWS credentials**: EC2 instance uses an IAM instance profile (no access keys); local deployment uses your configured AWS CLI credentials
+
+**Automated secret scanning:** CI pipeline checks every commit for accidentally committed credentials (AWS keys, private keys, etc.). Pull requests fail if secrets are detected.
+
+### AWS Security Best Practices
+
+This infrastructure follows AWS security hardening:
 
 - **No public inbound ports**: Security group blocks all public inbound traffic. Access via AWS Systems Manager Session Manager only.
 - **No SSH keys**: No key pairs are created or stored. Use SSM Session Manager for terminal access.
-- **Secrets in SSM Parameter Store**: All sensitive values (passwords, encryption keys) are stored as SecureString parameters and fetched at runtime.
 - **Encrypted EBS volumes**: Root volume is encrypted at rest with AWS-managed keys.
 - **S3 encryption**: Server-side encryption (AES256) and versioning enabled.
 - **Least-privilege IAM**: EC2 instance role has only S3 read/write and SSM GetParameter permissions for specific resources.
 - **IMDSv2 enforced**: EC2 metadata service requires session tokens (protects against SSRF).
-
-**Important:** Never commit secrets to this repository. All secrets are auto-generated by Terraform and stored in SSM.
 
 ## Development
 
@@ -836,11 +883,11 @@ A: For a robust seasonal model, collect at least 3-6 months of data across diffe
 **Q: Can I use this with Fleet Telemetry now?**  
 A: Fleet Telemetry setup (phase 2) is planned but not implemented. You can add it yourself by following Tesla's [Fleet Telemetry docs](https://developer.tesla.com/docs/fleet-api#fleet-telemetry). The architecture diagram shows where it fits.
 
-**Q: Should I use t3.micro (x86) or t4g.micro (ARM/Graviton)?**  
-A: **Default is t3.micro** (x86) because it's free-tier eligible for all AWS account types (legacy free tier and new free plan). After free tier, t4g.micro (ARM) costs 25% less ($6.20 vs $8.30/month) for the same 1 GB RAM. TeslaMate publishes official ARM64 Docker images, so there's no compatibility penalty. To switch: set `instance_type = "t4g.micro"` in `terraform.tfvars` and run `terraform apply`—the AMI automatically switches to arm64.
+**Q: Should I use t3.micro (x86_64) or t4g.micro (ARM/Graviton)?**  
+A: **Default is t3.micro** (x86_64) because it's free-tier eligible for all AWS account types (legacy free tier and new free plan). After free tier, t4g.micro (ARM) costs 25% less ($6.20 vs $8.30/month) for the same 1 GB RAM. TeslaMate publishes official ARM64 Docker images, so there's no compatibility penalty. To switch: set `instance_type = "t4g.micro"` in `terraform.tfvars` and run `terraform apply`—the AMI automatically switches to arm64 (Ubuntu 24.04 LTS).
 
 **Q: Does this work with Tesla's new API changes?**  
-A: As of October 2026, TeslaMate supports Tesla's latest OAuth flow and fleet API. If Tesla deprecates older APIs, the TeslaMate community typically updates within days. Update your Docker images regularly: `docker-compose pull && docker-compose up -d`.
+A: As of October 2026, TeslaMate supports Tesla's latest OAuth flow and fleet API. If Tesla deprecates older APIs, the TeslaMate community typically updates within days. Update your Docker images regularly: `docker compose pull && docker compose up -d`.
 
 ---
 
