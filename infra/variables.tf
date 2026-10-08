@@ -11,13 +11,13 @@ variable "environment" {
 }
 
 variable "instance_type" {
-  description = "EC2 instance type for TeslaMate host (t4g family recommended for ARM/Graviton)"
+  description = "EC2 instance type for TeslaMate host (t4g.micro is free-tier eligible; upgrade to t4g.small if memory constrained)"
   type        = string
-  default     = "t4g.small"
+  default     = "t4g.micro"
 }
 
 variable "volume_size" {
-  description = "Root EBS volume size in GB"
+  description = "Root EBS volume size in GB (30 GB covered by free tier)"
   type        = number
   default     = 30
 }

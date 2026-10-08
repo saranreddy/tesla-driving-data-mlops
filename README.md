@@ -30,19 +30,20 @@ This starter is for ML engineers or data scientists who want to collect and anal
 
 **Not a good fit for:**
 - Non-Tesla owners (you need a Tesla vehicle and a Tesla account)
-- Quick experiments (setup takes ~10 minutes and costs ~$16/month; for one-off analysis, export TeslaMate data manually)
+- Quick experiments (setup takes ~10 minutes; for one-off analysis, export TeslaMate data manually rather than running 24/7)
 - Production fleets or commercial use (this is designed for personal use; scaling to many vehicles requires Fleet Telemetry setup)
 
 **Long-term goal**: After collecting months of driving data, train an XGBoost regression model to predict energy consumption (Wh/mi) from features like distance, speed, temperature, elevation change, and HVAC usage. Deploy the model to a SageMaker endpoint and monitor for seasonal drift with Model Monitor. The ML pipeline (phase 2+) is not yet implemented.
 
 ## Features
 
-- **Self-hosted TeslaMate** on AWS EC2 (Graviton ARM t4g.small) with Docker Compose
+- **Self-hosted TeslaMate** on AWS EC2 (Graviton ARM t4g.micro, 1 GB RAM + 2 GB swap, **free-tier eligible**)
 - **Secure-by-default infrastructure** with Terraform: no public inbound ports, SSM Session Manager access, encrypted EBS, secrets in SSM Parameter Store
+- **Memory-optimized for 1 GB RAM**: PostgreSQL tuning, container limits, swap file, Grafana caching
 - **Nightly Parquet exports** to S3, partitioned by date, idempotent and tested
 - **Automated backups** with daily PostgreSQL dumps to S3 and EBS snapshots via Data Lifecycle Manager
 - **AWS Glue Data Catalog** and Athena workgroup for SQL exploration
-- **Cost-effective**: ~$16/month on-demand (see [Cost Estimate](#cost-estimate))
+- **Cost-effective**: ~$1.52/month during free tier, ~$10/month after (see [Cost Estimate](#cost-estimate))
 - **CI/CD ready** with GitHub Actions for Terraform validation, Python linting, and automated testing
 
 ## Architecture
@@ -120,7 +121,7 @@ terraform apply
 ```
 
 Terraform creates:
-- **EC2 instance** (t4g.small ARM/Graviton) running TeslaMate Docker Compose stack
+- **EC2 instance** (t4g.micro ARM/Graviton, 1 GB RAM + 2 GB swap, free-tier eligible) running TeslaMate Docker Compose stack
 - **S3 bucket** (versioning, encryption, lifecycle policies) for Parquet exports and backups
 - **SSM Parameter Store** (SecureString) for TeslaMate encryption key, PostgreSQL password, Grafana admin password
 - **IAM role** (least-privilege) for EC2 instance with S3 and SSM access
@@ -356,51 +357,82 @@ terraform destroy  # Type 'yes' when prompted
 
 ## Cost Estimate
 
-Running this infrastructure 24/7 in **us-east-1** (October 2026 pricing):
+### AWS Free Tier Eligibility
 
-### Monthly Costs
+**This project is designed to run on AWS Free Tier.** Costs depend on your account creation date:
+
+#### Accounts Created On/After July 15, 2025 (Credit-Based Free Tier)
+
+- **Free Tier Duration**: 6 months or until credits exhausted
+- **Free Credits**: $100 sign-up + up to $100 earned = **$200 total**
+- **Eligible Instance Types**: t3.micro, t3.small, t4g.micro, t4g.small (this repo uses **t4g.micro**)
+- **EBS**: 30 GB gp3 covered (free tier includes 30 GB gp2/gp3)
+- **What's FREE**: EC2 t4g.micro (1 GB RAM), 30 GB EBS, Glue, Athena queries, SSM Session Manager
+- **What COSTS money** (not covered by free tier):
+  - **EBS Snapshots**: ~$1.40/month (7 snapshots × 30 GB × $0.05/GB-month)
+  - **S3 storage over 5 GB**: ~$0.12/month for exports/backups (~5 GB typical)
+  - **Data Transfer out**: First 100 GB/month free (TeslaMate uses <1 GB)
+
+**Total cost during free tier: ~$1.52/month** (snapshots + S3 only)
+
+**After 6 months** (when free tier ends or credits run out):
+- EC2 t4g.micro: $6.20/month
+- EBS gp3 (30 GB): $2.40/month
+- EBS Snapshots: $1.40/month
+- S3 + Transfer: $0.21/month
+- **Total: $10.21/month** ($122/year)
+
+#### Accounts Created Before July 15, 2025 (Usage-Based Free Tier)
+
+- **Free Tier Duration**: 12 months from account creation
+- **Eligible Instance Types**: t2.micro, t3.micro (this repo uses **t4g.micro**, which works with credits if available)
+- **Monthly Limit**: 750 hours/month of t2.micro or t3.micro (enough for 24/7 single instance)
+- **What's FREE**: EC2 (up to 750 hrs), 30 GB EBS gp2/gp3, Glue, Athena, SSM
+- **What COSTS money**: Same as above (EBS snapshots, S3 over 5 GB)
+
+**Total cost during free tier: ~$1.52/month**
+
+**After 12 months**:
+- Same as above: **$10.21/month**
+
+### Full On-Demand Pricing (No Free Tier)
+
+If you're outside free tier (account >12 months old for pre-2025, or >6 months / $200 exhausted for post-2025):
 
 | Service | Configuration | Monthly Cost |
 |---------|--------------|--------------|
-| **EC2 t4g.small** | 730 hours/month on-demand | **$12.41** |
+| **EC2 t4g.micro** | 730 hours/month on-demand (1 GB RAM) | **$6.20** |
 | **EBS gp3** | 30 GB storage | **$2.40** |
 | **EBS Snapshots** | 7 daily snapshots × 30 GB | **$1.40** |
-| **S3 Standard** | ~5 GB (30 days of exports + backups) | **$0.12** |
+| **S3 Standard** | ~5 GB (exports + backups) | **$0.12** |
 | **S3 Requests** | Daily writes | **<$0.01** |
-| **Data Transfer** | TeslaMate API polling (~1 GB/month) | **$0.09** |
-| **Glue Data Catalog** | 2 tables, no crawler | **Free** |
+| **Data Transfer** | TeslaMate API polling (<1 GB/month) | **$0.09** |
+| **Glue Data Catalog** | 2 tables | **Free** |
 | **Athena** | Pay-per-query (first 10 TB scanned/month free) | **~$0** |
-| **SSM Session Manager** | Free tier | **Free** |
+| **SSM Session Manager** | Always free | **Free** |
 
-**Total: ~$16.42/month** ($197/year)
+**Total: ~$10.21/month** ($122/year)
 
-### Cost Optimization
+### Cost Optimization (After Free Tier)
 
 Reduce monthly costs while maintaining continuous data collection:
 
-1. **Use a Savings Plan or Reserved Instance**: 1-year commitment reduces t4g.small EC2 cost from $12.41 to ~$7.30/month (40% savings). 3-year commitment: ~$4.80/month (60% savings).
-2. **Switch to t4g.micro** ($6.20/month, 50% cheaper): Adequate for single-vehicle TeslaMate if memory usage stays under 1 GB. Monitor with CloudWatch; if PostgreSQL or TeslaMate crashes due to OOM, upgrade back to t4g.small.
+1. **Use a Savings Plan or Reserved Instance**: 1-year commitment reduces t4g.micro from $6.20 to ~$3.65/month (40% savings). 3-year commitment: ~$2.40/month (60% savings).
+2. **Upgrade to t4g.small only if needed** ($12.41/month on-demand, $7.30 with 1-yr RI): If experiencing frequent OOM or slow Grafana performance despite swap, upgrade. Otherwise, t4g.micro with 2 GB swap handles single-vehicle TeslaMate well.
 3. **Reduce backup retention**: Change `backup_retention_days` from 30 to 7 days in `terraform.tfvars` and `terraform apply`. Reduces S3 storage by ~75% (~$0.09/month savings).
-4. **Reduce snapshot retention**: Edit the DLM policy retain_rule in `infra/ec2.tf` from 7 to 3 days, then `terraform apply`. Saves ~$0.80/month.
+4. **Reduce snapshot retention**: Edit the DLM policy `retain_rule` count in `infra/ec2.tf` from 7 to 3 days, then `terraform apply`. Saves ~$0.80/month.
 5. **Archive old exports faster**: Change `data_lifecycle_days` from 90 to 30 days to transition Parquet files to S3 IA sooner (~$0.05/month savings after 90 days).
 
 **Tradeoffs:**
 - Shorter retention: Less recovery window if you need to restore old data
-- t4g.micro: May run out of memory with heavy Grafana dashboard use or large databases (multiple vehicles, years of data)
+- t4g.micro limitations: Grafana dashboards load slower (~5-10 seconds); heavy dashboard use may cause temporary slowness (swap kicks in)
 
-### Free Tier Eligibility
+### Summary
 
-If you're within AWS Free Tier (12 months after account creation):
-- 750 hours/month of t2.micro (x86) or t3.micro (x86) are free
-- This repository uses t4g.small (ARM) by default for cost efficiency post-free-tier
-- To use free tier: change `instance_type = "t3.micro"` in `terraform.tfvars` and update `data.aws_ami.ubuntu_arm64` to use `x86_64` architecture
-
-With free tier: ~$4/month (EBS, S3, snapshots)
-
-### One-Time Costs
-
-- Terraform apply: **Free** (no charges for AWS API calls)
-- Athena queries: **~$0** (typically <1 GB scanned per query; first 10 TB/month free)
+- **During free tier**: ~$1.52/month (snapshots + S3 only)
+- **After free tier**: ~$10.21/month with t4g.micro (single vehicle, default settings)
+- **With optimizations**: ~$5-7/month (Savings Plan + shorter retention)
+- **Upgrade path**: t4g.small (~$16/month) if memory constrained
 
 ## Configuration
 
@@ -412,7 +444,7 @@ Customize in `infra/terraform.tfvars`:
 |----------|---------|-------------|
 | `aws_region` | `us-east-1` | AWS region (must match AWS CLI) |
 | `environment` | `dev` | Environment name tag |
-| `instance_type` | `t4g.small` | EC2 instance type (ARM/Graviton recommended) |
+| `instance_type` | `t4g.micro` | EC2 instance type (free-tier eligible; upgrade to t4g.small if memory constrained) |
 | `volume_size` | `30` | Root EBS volume size (GB) |
 | `backup_retention_days` | `30` | Days to retain database backups in S3 |
 | `data_lifecycle_days` | `90` | Days before moving exports to S3 IA |
@@ -506,6 +538,65 @@ TeslaMate takes ~2-3 minutes to start after instance boot. If containers are not
 - Check lifecycle policies are active: `aws s3api get-bucket-lifecycle-configuration --bucket $S3_BUCKET`
 - Review S3 storage usage: `aws s3 ls s3://$S3_BUCKET/ --recursive --human-readable --summarize`
 - Reduce backup retention: Update `backup_retention_days` in `terraform.tfvars` and `terraform apply`
+
+### 7. Out of Memory (OOM) or Slow Grafana Dashboards
+
+**Symptoms:**
+- Docker containers crashing and restarting frequently
+- Grafana dashboards taking >30 seconds to load or timing out
+- SSH session freezes or becomes unresponsive
+- CloudWatch showing high memory utilization (>90%)
+
+**Diagnosis:**
+
+```bash
+# Check memory usage
+free -h
+
+# Check swap usage (should show 2 GB swap active)
+swapon --show
+
+# Check Docker container memory stats
+docker stats --no-stream
+
+# Check for OOM kills in system logs
+dmesg | grep -i "out of memory"
+journalctl -u docker | grep -i "oom"
+```
+
+**Fixes (in order of preference):**
+
+1. **Verify swap is active** (created by user_data.sh):
+   ```bash
+   swapon --show  # Should show /swapfile 2G
+   free -h        # Should show 2G swap
+   ```
+   If swap is missing, recreate it:
+   ```bash
+   sudo fallocate -l 2G /swapfile
+   sudo chmod 600 /swapfile
+   sudo mkswap /swapfile
+   sudo swapon /swapfile
+   echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+   ```
+
+2. **Reduce concurrent Grafana dashboard loading**: Load one dashboard at a time, wait for it to finish before opening another.
+
+3. **Restart containers to clear memory**:
+   ```bash
+   cd /opt/teslamate
+   docker-compose restart
+   ```
+
+4. **Upgrade to t4g.small** (2 GB RAM, $12.41/month):
+   - Edit `infra/terraform.tfvars`: `instance_type = "t4g.small"`
+   - Run `terraform apply`
+   - Terraform will stop the instance, change the type, and restart (~5 minutes downtime)
+
+**Preventive measures:**
+- Avoid opening multiple Grafana dashboards simultaneously
+- Use Athena for heavy analytics instead of Grafana
+- Monitor memory with CloudWatch: set up alarms for >85% memory usage
 
 ## Troubleshooting
 
@@ -714,7 +805,7 @@ A: For a robust seasonal model, collect at least 3-6 months of data across diffe
 A: Fleet Telemetry setup (phase 2) is planned but not implemented. You can add it yourself by following Tesla's [Fleet Telemetry docs](https://developer.tesla.com/docs/fleet-api#fleet-telemetry). The architecture diagram shows where it fits.
 
 **Q: Why Graviton (ARM) instead of x86?**  
-A: t4g.small (ARM) costs ~30% less than t3.small (x86) for the same performance. TeslaMate publishes official ARM64 Docker images, so there's no compatibility penalty. If you prefer x86, set `instance_type = "t3.small"` and update the AMI filter to `x86_64`.
+A: t4g.micro (ARM) is free-tier eligible (for accounts created after July 15, 2025) and costs ~40% less than t3.micro (x86) after free tier. TeslaMate publishes official ARM64 Docker images, so there's no compatibility penalty. If you prefer x86, set `instance_type = "t3.micro"` and update the AMI filter in `infra/data.tf` to `x86_64`.
 
 **Q: Does this work with Tesla's new API changes?**  
 A: As of October 2026, TeslaMate supports Tesla's latest OAuth flow and fleet API. If Tesla deprecates older APIs, the TeslaMate community typically updates within days. Update your Docker images regularly: `docker-compose pull && docker-compose up -d`.

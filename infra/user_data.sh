@@ -31,6 +31,14 @@ unzip -q /tmp/awscliv2.zip -d /tmp
 /tmp/aws/install
 rm -rf /tmp/aws /tmp/awscliv2.zip
 
+log "Creating 2 GB swap file for t4g.micro (1 GB RAM)..."
+fallocate -l 2G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+swapon --show
+
 log "Fetching secrets from SSM Parameter Store..."
 ENCRYPTION_KEY=$(aws ssm get-parameter --name "${encryption_key}" --with-decryption --query 'Parameter.Value' --output text --region "${aws_region}")
 POSTGRES_PASSWORD=$(aws ssm get-parameter --name "${postgres_pass}" --with-decryption --query 'Parameter.Value' --output text --region "${aws_region}")
@@ -56,6 +64,8 @@ services:
       - 4000:4000
     cap_drop:
       - all
+    mem_limit: 256m
+    mem_reservation: 128m
     depends_on:
       - database
       - mosquitto
@@ -63,10 +73,19 @@ services:
   database:
     image: postgres:17
     restart: always
+    command: >
+      postgres
+      -c shared_buffers=128MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=64MB
+      -c effective_cache_size=256MB
+      -c max_connections=20
     environment:
       - POSTGRES_USER=teslamate
       - POSTGRES_PASSWORD=$${POSTGRES_PASSWORD}
       - POSTGRES_DB=teslamate
+    mem_limit: 384m
+    mem_reservation: 256m
     volumes:
       - teslamate-db:/var/lib/postgresql/data
 
@@ -80,6 +99,10 @@ services:
       - DATABASE_HOST=database
       - GF_SECURITY_ADMIN_PASSWORD=$${GRAFANA_ADMIN_PASSWORD}
       - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_DATABASE_CACHE_MODE=shared
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/overview.json
+    mem_limit: 256m
+    mem_reservation: 128m
     ports:
       - 3000:3000
     volumes:
@@ -89,6 +112,8 @@ services:
     image: eclipse-mosquitto:2
     restart: always
     command: mosquitto -c /mosquitto-no-auth.conf
+    mem_limit: 64m
+    mem_reservation: 32m
     volumes:
       - mosquitto-conf:/mosquitto/config
       - mosquitto-data:/mosquitto/data

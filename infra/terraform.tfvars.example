@@ -4,8 +4,8 @@ aws_region = "us-east-1"
 # Environment name
 environment = "dev"
 
-# EC2 instance type (t4g family recommended for ARM/Graviton cost efficiency)
-instance_type = "t4g.small"
+# EC2 instance type (t4g.micro is free-tier eligible; upgrade to t4g.small for heavy use)
+instance_type = "t4g.micro"
 
 # Root EBS volume size in GB
 volume_size = 30

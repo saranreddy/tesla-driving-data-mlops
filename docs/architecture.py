@@ -99,7 +99,7 @@ with Diagram(
 
     with Cluster("AWS account  (us-east-1)  -  all infra Terraform-managed", graph_attr=TF_BOX) as acct:
 
-        with Cluster("EC2 t4g.small  -  Docker: TeslaMate host", graph_attr=INGEST_BOX):
+        with Cluster("EC2 t4g.micro  -  Docker: TeslaMate host", graph_attr=INGEST_BOX):
             teslamate = EC2("TeslaMate\n(poll + stream)")
             pg = Postgresql("PostgreSQL\ndrives + charges")
             grafana = Grafana("Grafana\nlive dashboards")
