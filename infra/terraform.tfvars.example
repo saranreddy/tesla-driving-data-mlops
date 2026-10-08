@@ -1,0 +1,17 @@
+# AWS region for all resources (must match AWS CLI default region)
+aws_region = "us-east-1"
+
+# Environment name
+environment = "dev"
+
+# EC2 instance type (t3.micro is free-tier eligible for all accounts; t4g.micro is 25% cheaper after free tier)
+instance_type = "t3.micro"
+
+# Root EBS volume size in GB
+volume_size = 30
+
+# Number of days to retain database backups in S3
+backup_retention_days = 30
+
+# Number of days before moving S3 data to Infrequent Access storage
+data_lifecycle_days = 90
