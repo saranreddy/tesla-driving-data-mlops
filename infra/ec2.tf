@@ -3,12 +3,13 @@ resource "aws_instance" "teslamate" {
   instance_type          = var.instance_type
   iam_instance_profile   = aws_iam_instance_profile.teslamate.name
   vpc_security_group_ids = [aws_security_group.teslamate.id]
+  subnet_id              = sort(data.aws_subnets.default.ids)[0]
 
   root_block_device {
     volume_type           = "gp3"
     volume_size           = var.volume_size
     encrypted             = true
-    delete_on_termination = false
+    delete_on_termination = true
 
     tags = {
       Name = "TeslaMate Root Volume"
@@ -40,6 +41,14 @@ resource "aws_instance" "teslamate" {
     aws_ssm_parameter.postgres_password,
     aws_ssm_parameter.grafana_admin_password
   ]
+
+  # Protect the live instance from replacement. The most_recent AMI changes frequently,
+  # and user_data edits would normally stop/start the instance. Since Postgres data lives
+  # on the root volume, replacement or restart without backup would cause data loss.
+  # To deliberately rebuild: back up first, then: terraform apply -replace=aws_instance.teslamate
+  lifecycle {
+    ignore_changes = [ami, user_data]
+  }
 }
 
 resource "aws_dlm_lifecycle_policy" "teslamate_daily" {
