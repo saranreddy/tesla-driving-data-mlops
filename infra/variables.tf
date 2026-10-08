@@ -1,0 +1,41 @@
+variable "aws_region" {
+  description = "AWS region for all resources"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
+  default     = "dev"
+}
+
+variable "instance_type" {
+  description = "EC2 instance type for TeslaMate host (t4g family recommended for ARM/Graviton)"
+  type        = string
+  default     = "t4g.small"
+}
+
+variable "volume_size" {
+  description = "Root EBS volume size in GB"
+  type        = number
+  default     = 30
+}
+
+variable "project_name" {
+  description = "Project name prefix for resource naming"
+  type        = string
+  default     = "teslamate-mlops"
+}
+
+variable "backup_retention_days" {
+  description = "Number of days to retain database backups in S3"
+  type        = number
+  default     = 30
+}
+
+variable "data_lifecycle_days" {
+  description = "Number of days before moving S3 data to Infrequent Access storage"
+  type        = number
+  default     = 90
+}
