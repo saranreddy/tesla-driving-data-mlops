@@ -20,13 +20,13 @@ jobs:
           echo "Scanning for accidentally committed credentials..."
           
           # Check for AWS access keys (AKIA...)
-          if grep -r "AKIA[0-9A-Z]\{16\}" . --exclude-dir=.git --exclude-dir=.terraform 2>/dev/null; then
+          if grep -r "AKIA[0-9A-Z]\{16\}" . --exclude-dir=.git --exclude-dir=.terraform --exclude="ci.yml" 2>/dev/null; then
             echo "❌ ERROR: AWS access key detected"
             exit 1
           fi
           
-          # Check for private keys
-          if grep -r "BEGIN.*PRIVATE KEY" . --exclude-dir=.git --exclude-dir=.terraform 2>/dev/null; then
+          # Check for private keys (exclude this CI file to avoid self-match)
+          if grep -r "BEGIN.*PRIVATE KEY" . --exclude-dir=.git --exclude-dir=.terraform --exclude="ci.yml" 2>/dev/null; then
             echo "❌ ERROR: Private key detected"
             exit 1
           fi
