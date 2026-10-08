@@ -27,6 +27,16 @@ output "ssm_parameters" {
   }
 }
 
+output "instance_architecture" {
+  description = "EC2 instance architecture (arm64 for Graviton, x86_64 for Intel/AMD)"
+  value       = local.architecture
+}
+
+output "ami_id" {
+  description = "AMI ID used for the EC2 instance"
+  value       = data.aws_ami.ubuntu.id
+}
+
 output "connect_command" {
   description = "AWS CLI commands to connect to TeslaMate and Grafana"
   value       = <<-EOT

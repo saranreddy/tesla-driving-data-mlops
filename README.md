@@ -37,13 +37,13 @@ This starter is for ML engineers or data scientists who want to collect and anal
 
 ## Features
 
-- **Self-hosted TeslaMate** on AWS EC2 (Graviton ARM t4g.micro, 1 GB RAM + 2 GB swap, **free-tier eligible**)
+- **Self-hosted TeslaMate** on AWS EC2 (Graviton ARM t4g.micro, 1 GB RAM + 2 GB swap, free-plan eligible for new accounts)
 - **Secure-by-default infrastructure** with Terraform: no public inbound ports, SSM Session Manager access, encrypted EBS, secrets in SSM Parameter Store
 - **Memory-optimized for 1 GB RAM**: PostgreSQL tuning, container limits, swap file, Grafana caching
 - **Nightly Parquet exports** to S3, partitioned by date, idempotent and tested
 - **Automated backups** with daily PostgreSQL dumps to S3 and EBS snapshots via Data Lifecycle Manager
 - **AWS Glue Data Catalog** and Athena workgroup for SQL exploration
-- **Cost-effective**: ~$1.52/month during free tier, ~$10/month after (see [Cost Estimate](#cost-estimate))
+- **Cost-effective**: Free tier eligible; ~$10/month on-demand (see [Cost Estimate](#cost-estimate))
 - **CI/CD ready** with GitHub Actions for Terraform validation, Python linting, and automated testing
 
 ## Architecture
@@ -121,7 +121,7 @@ terraform apply
 ```
 
 Terraform creates:
-- **EC2 instance** (t4g.micro ARM/Graviton, 1 GB RAM + 2 GB swap, free-tier eligible) running TeslaMate Docker Compose stack
+- **EC2 instance** (t4g.micro ARM/Graviton, 1 GB RAM + 2 GB swap, free-plan eligible for new accounts) running TeslaMate Docker Compose stack
 - **S3 bucket** (versioning, encryption, lifecycle policies) for Parquet exports and backups
 - **SSM Parameter Store** (SecureString) for TeslaMate encryption key, PostgreSQL password, Grafana admin password
 - **IAM role** (least-privilege) for EC2 instance with S3 and SSM access
@@ -359,41 +359,74 @@ terraform destroy  # Type 'yes' when prompted
 
 ### AWS Free Tier Eligibility
 
-**This project is designed to run on AWS Free Tier.** Costs depend on your account creation date:
+**Costs depend on your AWS account creation date and current age.** This project defaults to t4g.micro (cheapest after free tier) but you may need t3.micro for legacy free tier.
 
-#### Accounts Created On/After July 15, 2025 (Credit-Based Free Tier)
+#### Check Your Eligible Instance Types
 
-- **Free Tier Duration**: 6 months or until credits exhausted
-- **Free Credits**: $100 sign-up + up to $100 earned = **$200 total**
-- **Eligible Instance Types**: t3.micro, t3.small, t4g.micro, t4g.small (this repo uses **t4g.micro**)
-- **EBS**: 30 GB gp3 covered (free tier includes 30 GB gp2/gp3)
-- **What's FREE**: EC2 t4g.micro (1 GB RAM), 30 GB EBS, Glue, Athena queries, SSM Session Manager
-- **What COSTS money** (not covered by free tier):
-  - **EBS Snapshots**: ~$1.40/month (7 snapshots × 30 GB × $0.05/GB-month)
-  - **S3 storage over 5 GB**: ~$0.12/month for exports/backups (~5 GB typical)
-  - **Data Transfer out**: First 100 GB/month free (TeslaMate uses <1 GB)
+Run this command to see what's free-tier eligible in your account:
 
-**Total cost during free tier: ~$1.52/month** (snapshots + S3 only)
+```bash
+aws ec2 describe-instance-types \
+  --filters Name=free-tier-eligible,Values=true \
+  --query "InstanceTypes[*].[InstanceType]" \
+  --output text | sort
+```
 
-**After 6 months** (when free tier ends or credits run out):
-- EC2 t4g.micro: $6.20/month
-- EBS gp3 (30 GB): $2.40/month
-- EBS Snapshots: $1.40/month
-- S3 + Transfer: $0.21/month
-- **Total: $10.21/month** ($122/year)
+#### Accounts Created On/After July 15, 2025 (Credit-Based Free Plan)
+
+- **Duration**: 6 months or until credits exhausted (whichever comes first)
+- **Credits**: $100 sign-up credit + up to $100 earned = **$200 total**
+- **Eligible Instance Types**: t3.micro, t3.small, **t4g.micro**, t4g.small, c7i-flex.large, m7i-flex.large
+- **How it works**: All AWS usage draws down your credit balance. No separate "free" services; credits cover costs up to limits.
+- **This repo's default (t4g.micro)**: ✅ **Covered by credits**
+
+**What draws down credits**:
+- EC2 t4g.micro usage: ~$6.20/month equivalent
+- EBS gp3 (30 GB): ~$2.40/month equivalent
+- EBS Snapshots: ~$1.40/month
+- S3 storage: ~$0.12/month
+- **Total monthly credit burn**: ~$10.21/month
+
+**Credits last**: ~20 months if only running this project ($200 ÷ $10.21/mo)
+
+**After credits run out** (or 6 months, whichever is first):
+- Pay-as-you-go: **$10.21/month**
 
 #### Accounts Created Before July 15, 2025 (Usage-Based Free Tier)
 
-- **Free Tier Duration**: 12 months from account creation
-- **Eligible Instance Types**: t2.micro, t3.micro (this repo uses **t4g.micro**, which works with credits if available)
-- **Monthly Limit**: 750 hours/month of t2.micro or t3.micro (enough for 24/7 single instance)
-- **What's FREE**: EC2 (up to 750 hrs), 30 GB EBS gp2/gp3, Glue, Athena, SSM
-- **What COSTS money**: Same as above (EBS snapshots, S3 over 5 GB)
+- **Duration**: 12 months from account creation (then expires)
+- **Eligible Instance Types**: t2.micro, t3.micro ONLY (NOT t4g.micro)
+- **Monthly Limit**: 750 hours/month (enough for one 24/7 instance)
+- **This repo's default (t4g.micro)**: ❌ **Not covered** — change to t3.micro
 
-**Total cost during free tier: ~$1.52/month**
+**To use free tier with this account type**:
+```bash
+# Edit infra/terraform.tfvars
+instance_type = "t3.micro"
+```
 
-**After 12 months**:
-- Same as above: **$10.21/month**
+Terraform will automatically use the correct x86_64 AMI. TeslaMate Docker images are multi-arch and work on both ARM and x86.
+
+**What's FREE (within 750 hours/month)**:
+- EC2 t3.micro (1 GB RAM, x86): Up to 750 hours/month (covers 24/7 single instance)
+- EBS: 30 GB gp2/gp3 storage
+- Always-free services: Glue Data Catalog (1M objects), Athena (10 TB scanned/month), SSM Session Manager
+
+**What COSTS money even during free tier**:
+- **EBS Snapshots**: ~$1.40/month (not covered by free tier)
+- **S3 storage over 5 GB**: ~$0.12/month (first 5 GB free for 12 months)
+- **Data Transfer out over 100 GB**: Free for this project (<1 GB/month)
+
+**Total cost during free tier: ~$1.52/month** (snapshots + S3 over 5 GB)
+
+**After 12 months** (free tier expires):
+- Pay on-demand pricing: **$8.30/month** for t3.micro, or switch to **t4g.micro for $6.20/month**
+
+#### Accounts Older Than 12 Months (No Free Tier)
+
+- **Free tier**: None (expired)
+- **Recommended**: Use default t4g.micro (cheapest option)
+- **Cost**: See "Full On-Demand Pricing" below
 
 ### Full On-Demand Pricing (No Free Tier)
 
@@ -427,12 +460,16 @@ Reduce monthly costs while maintaining continuous data collection:
 - Shorter retention: Less recovery window if you need to restore old data
 - t4g.micro limitations: Grafana dashboards load slower (~5-10 seconds); heavy dashboard use may cause temporary slowness (swap kicks in)
 
-### Summary
+### Cost Summary by Account Type
 
-- **During free tier**: ~$1.52/month (snapshots + S3 only)
-- **After free tier**: ~$10.21/month with t4g.micro (single vehicle, default settings)
-- **With optimizations**: ~$5-7/month (Savings Plan + shorter retention)
-- **Upgrade path**: t4g.small (~$16/month) if memory constrained
+| Account Type | Instance to Use | Cost During Free Period | Cost After |
+|-------------|----------------|------------------------|------------|
+| **Created on/after July 15, 2025** (credit-based) | t4g.micro (default) ✅ | Credits cover ~$10/mo<br>(~20 months of credits) | $10.21/month |
+| **Created before July 15, 2025, <12 months old** (usage-based) | **t3.micro** (set in tfvars) | ~$1.52/month<br>(snapshots + S3) | $8.30/mo (t3), or switch to t4g for $10.21/mo |
+| **Account >12 months old** (no free tier) | t4g.micro (default) ✅ | $10.21/month | $10.21/month |
+
+**With optimizations** (Savings Plans, shorter retention): ~$5-7/month  
+**Upgrade path if memory constrained**: t4g.small (~$16/month)
 
 ## Configuration
 
@@ -444,7 +481,7 @@ Customize in `infra/terraform.tfvars`:
 |----------|---------|-------------|
 | `aws_region` | `us-east-1` | AWS region (must match AWS CLI) |
 | `environment` | `dev` | Environment name tag |
-| `instance_type` | `t4g.micro` | EC2 instance type (free-tier eligible; upgrade to t4g.small if memory constrained) |
+| `instance_type` | `t4g.micro` | EC2 instance type (free-plan eligible for new accounts; use t3.micro for legacy free tier) |
 | `volume_size` | `30` | Root EBS volume size (GB) |
 | `backup_retention_days` | `30` | Days to retain database backups in S3 |
 | `data_lifecycle_days` | `90` | Days before moving exports to S3 IA |
@@ -805,7 +842,7 @@ A: For a robust seasonal model, collect at least 3-6 months of data across diffe
 A: Fleet Telemetry setup (phase 2) is planned but not implemented. You can add it yourself by following Tesla's [Fleet Telemetry docs](https://developer.tesla.com/docs/fleet-api#fleet-telemetry). The architecture diagram shows where it fits.
 
 **Q: Why Graviton (ARM) instead of x86?**  
-A: t4g.micro (ARM) is free-tier eligible (for accounts created after July 15, 2025) and costs ~40% less than t3.micro (x86) after free tier. TeslaMate publishes official ARM64 Docker images, so there's no compatibility penalty. If you prefer x86, set `instance_type = "t3.micro"` and update the AMI filter in `infra/data.tf` to `x86_64`.
+A: t4g.micro (ARM) is free-plan eligible (for accounts created on/after July 15, 2025, covered by credits) and costs ~25% less than t3.micro ($6.20 vs $8.30/month) for the same 1 GB RAM. TeslaMate publishes official ARM64 Docker images, so there's no compatibility penalty. **For legacy free tier** (accounts created before July 15, 2025, within 12 months), set `instance_type = "t3.micro"` in `terraform.tfvars`—the AMI will automatically switch to x86_64.
 
 **Q: Does this work with Tesla's new API changes?**  
 A: As of October 2026, TeslaMate supports Tesla's latest OAuth flow and fleet API. If Tesla deprecates older APIs, the TeslaMate community typically updates within days. Update your Docker images regularly: `docker-compose pull && docker-compose up -d`.
