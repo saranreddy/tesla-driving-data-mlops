@@ -387,9 +387,9 @@ aws ec2 describe-instance-types \
 - S3 storage: ~$0.12/month
 - **Total monthly credit burn**: ~$10.21/month
 
-**Credits last**: ~20 months if only running this project ($200 ÷ $10.21/mo)
+**Free period ends**: After **6 months** (time limit) or when credits exhausted, whichever comes first. At this project's burn rate, the 6-month cap applies (~$61 of $100-200 credits used).
 
-**After credits run out** (or 6 months, whichever is first):
+**After 6 months**:
 - Pay-as-you-go: **$10.21/month**
 
 #### Accounts Created Before July 15, 2025 (Usage-Based Free Tier)
@@ -464,7 +464,7 @@ Reduce monthly costs while maintaining continuous data collection:
 
 | Account Type | Instance to Use | Cost During Free Period | Cost After |
 |-------------|----------------|------------------------|------------|
-| **Created on/after July 15, 2025** (credit-based) | t4g.micro (default) ✅ | Credits cover ~$10/mo<br>(~20 months of credits) | $10.21/month |
+| **Created on/after July 15, 2025** (credit-based) | t4g.micro (default) ✅ | Credits cover ~$10/mo<br>(6-month time cap) | $10.21/month |
 | **Created before July 15, 2025, <12 months old** (usage-based) | **t3.micro** (set in tfvars) | ~$1.52/month<br>(snapshots + S3) | $8.30/mo (t3), or switch to t4g for $10.21/mo |
 | **Account >12 months old** (no free tier) | t4g.micro (default) ✅ | $10.21/month | $10.21/month |
 
