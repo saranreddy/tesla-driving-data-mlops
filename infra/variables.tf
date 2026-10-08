@@ -11,9 +11,9 @@ variable "environment" {
 }
 
 variable "instance_type" {
-  description = "EC2 instance type for TeslaMate host (t4g.micro is free-tier eligible; upgrade to t4g.small if memory constrained)"
+  description = "EC2 instance type for TeslaMate host (t3.micro is free-tier eligible for all accounts; t4g.micro is 25% cheaper after free tier)"
   type        = string
-  default     = "t4g.micro"
+  default     = "t3.micro"
 }
 
 variable "volume_size" {
