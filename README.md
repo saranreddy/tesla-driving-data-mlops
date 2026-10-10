@@ -53,11 +53,11 @@ My first complete export: **October 9, 2026, 2:09 PM CT**
 |-------|---------------|
 | **Bronze** | Export succeeded. But `kwh_used` = 43.58 — that's *kilometers* of range lost, not kWh! |
 | **Bug Caught** | Energy calculation was `start_range - end_range` instead of `(start_range - end_range) × car_efficiency`. Fixed in [PR #4](https://github.com/saranreddy/tesla-driving-data-mlops/pull/4). |
-| **Silver** | Quality checks pass: energy plausible (8.7 kWh ≈ 9% battery drop), efficiency 216 Wh/km (reasonable for highway), trip long enough, odometer matches distance. `quality_flag = false` ✅ |
-| **Gold (Features)** | Hard braking: 2 events per 100mi. Speeding (>80mph): ~60% of trip. Night driving: 0 min. Highway: ~70%. |
-| **Gold (Score)** | **Risk score: 42/100** (Average driver). Top factor: `speeding` (sustained highway speed near 80 mph). |
+| **Silver** | *Quality checks will run once deployed.* Expected: energy plausible (8-9 kWh ≈ 9% battery drop), efficiency ~200 Wh/km (highway), trip long enough, odometer matches. |
+| **Gold (Features)** | *Features will be extracted once deployed.* Will capture: hard braking events, speeding time, night driving, highway %. |
+| **Gold (Score)** | *Risk score will be computed from `ins_trip_scores` table once deployed.* The transparent model will show exactly why the score is what it is. |
 
-**The Insight:** My driving is average — some highway speeding but smooth braking. If I were shopping for insurance, I'd know I'm not getting a "safe driver" discount, but I'm not high-risk either.
+**The Plan:** After deployment, query `teslamate_insurance.ins_trip_scores WHERE date = '2026-10-09'` to see the actual risk score and top factors.
 
 ---
 
@@ -128,13 +128,16 @@ flowchart LR
 
 **What's Live:**
 - ✅ TeslaMate capturing my real Model S data since October 2026
-- ✅ Nightly Parquet exports to S3 (drives, charges, positions)
-- ✅ Bronze/silver/gold layers with quality checks
-- ✅ Insurance risk scoring (0-100 scale, transparent weights)
-- ✅ Athena queries work, costs ~$12/month all-in
-- ✅ Modular repo structure (platform + use cases)
+- ✅ Nightly Parquet exports to S3 (drives, charges) — bronze layer working
+- ✅ Athena queries work, costs ~$12/month (estimate)
 
-**What's Building:**
+**What's Built, Deploying:**
+- 🔨 Bronze/silver/gold medallion layers (code ready, PR #12)
+- 🔨 Quality checks from issue #11 (silver layer)
+- 🔨 Insurance risk scoring (gold layer)
+- 🔨 Positions export (1-second GPS readings)
+
+**What's Planned:**
 - 🔨 Full unit test coverage (silver checks, gold features)
 - 🔨 Grafana dashboards (risk trends over time)
 - 🔨 Automated deployment (`user_data.sh` embedding)
@@ -278,17 +281,21 @@ tesla-driving-data-mlops/
 ## 🗺️ Roadmap
 
 ### ✅ Live in Production
-- [x] TeslaMate on EC2 (~$8/mo)
-- [x] Nightly S3 exports (Parquet)
+- [x] TeslaMate on EC2 (capturing real data)
+- [x] Nightly S3 exports (Parquet, drives + charges)
 - [x] Glue + Athena (query-ready)
-- [x] Bronze layer (raw data)
-- [x] Silver layer (quality checks from [#11](https://github.com/saranreddy/tesla-driving-data-mlops/issues/11))
-- [x] Gold layer (insurance risk scoring)
-- [x] Modular repo layout ([#3](https://github.com/saranreddy/tesla-driving-data-mlops/pull/3))
 - [x] Energy calculation fix ([#4](https://github.com/saranreddy/tesla-driving-data-mlops/pull/4))
 
+### 🔨 Built, Ready to Deploy
+- [x] Modular repo layout ([#3](https://github.com/saranreddy/tesla-driving-data-mlops/pull/3))
+- [x] Bronze/silver/gold medallion layers ([#12](https://github.com/saranreddy/tesla-driving-data-mlops/pull/12))
+- [x] Quality checks from [#11](https://github.com/saranreddy/tesla-driving-data-mlops/issues/11)
+- [x] Insurance risk scoring (transparent 0-100)
+- [x] Positions export (1-second GPS readings)
+
 ### 🔨 In Progress
-- [ ] Comprehensive unit tests ([#12](https://github.com/saranreddy/tesla-driving-data-mlops/pull/12) follow-up)
+- [ ] Deploy medallion layers to live instance
+- [ ] Comprehensive unit tests (silver checks, gold features)
 - [ ] Grafana dashboards (risk trends, monthly summary)
 - [ ] Embed medallion scripts in `user_data.sh` (automated deployment)
 
@@ -304,24 +311,11 @@ tesla-driving-data-mlops/
 
 ## 💰 Cost Breakdown
 
-**Current monthly spend:** ~$12
+**Estimated monthly spend:** ~$12, mostly the t4g.micro instance
 
-| Service | Usage | Cost |
-|---------|-------|------|
-| EC2 t4g.micro | 730 hrs/mo (24×7, Graviton ARM) | ~$6.00 |
-| EBS gp3 | 30 GB (OS + Postgres) | ~$2.40 |
-| S3 | ~5 GB (Parquet exports) | ~$0.12 |
-| S3 requests | ~1000 PUTs/month | ~$0.01 |
-| Data transfer | <1 GB out/month | ~$0.00 |
-| Athena | ~100 MB scanned/month | ~$0.01 |
-| Glue Catalog | 3 databases, 8 tables (free tier) | $0.00 |
-| **Total** | | **~$8.54** |
+The bulk is the EC2 t4g.micro running 24×7 (~$6-8/month depending on region). Additional costs: EBS storage for the OS and database, S3 for Parquet files (minimal — a few GB), and Athena queries (pennies per query). Glue Catalog is in the free tier.
 
-*Actual cost lower than $12 estimate — no Secrets Manager, CloudWatch Logs free tier, minimal Athena usage.*
-
-**Cost per drive:** ~$0.30/day = ~$0.02/drive (15 drives/day avg)
-
-**Free tier eligible:** First 12 months on new AWS accounts
+**No actual AWS bill yet** — this is an estimate based on AWS pricing. Will update with real costs after the first full month of operation.
 
 ---
 
