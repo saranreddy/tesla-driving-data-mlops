@@ -4,6 +4,7 @@
 Exports drives and charges from the TeslaMate PostgreSQL database to Parquet files
 in S3, partitioned by date. Idempotent: safe to run multiple times for the same date.
 """
+
 import argparse
 import logging
 import os
@@ -179,7 +180,7 @@ def main():
     if args.date:
         date_str = args.date
     else:
-        yesterday = (datetime.now(timezone.utc).date() - timedelta(days=1))
+        yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
         date_str = yesterday.strftime("%Y-%m-%d")
 
     db_password = args.db_password or os.environ.get("POSTGRES_PASSWORD")
