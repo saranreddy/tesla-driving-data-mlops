@@ -67,15 +67,15 @@ jobs:
         terraform_version: 1.9.0
     
     - name: Terraform Format Check
-      working-directory: infra
+      working-directory: teslamate_platform/infra
       run: terraform fmt -check -recursive
     
     - name: Terraform Init
-      working-directory: infra
+      working-directory: teslamate_platform/infra
       run: terraform init -backend=false
     
     - name: Terraform Validate
-      working-directory: infra
+      working-directory: teslamate_platform/infra
       run: terraform validate
 
   python:
@@ -97,19 +97,19 @@ jobs:
     
     - name: Lint with flake8
       run: |
-        flake8 src/ tests/ --max-line-length=120 --exclude=__pycache__
+        flake8 teslamate_platform/ tests/ --max-line-length=120 --exclude=__pycache__
     
     - name: Check formatting with black
       run: |
-        black --check src/ tests/
+        black --check teslamate_platform/ tests/
     
     - name: Check import sorting with isort
       run: |
-        isort --check-only src/ tests/
+        isort --check-only teslamate_platform/ tests/
     
     - name: Run tests
       run: |
-        pytest tests/ -v --cov=src --cov-report=term-missing
+        pytest tests/ -v --cov=teslamate_platform --cov-report=term-missing
 
   architecture-diagram:
     name: Validate Architecture Diagram

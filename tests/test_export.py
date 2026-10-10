@@ -62,10 +62,13 @@ def mock_charges_df():
 def test_export_drives_success(mock_db_connection, mock_drives_df):
     """Test successful drives export."""
     with patch(
-        "src.export.export_parquet.pd.read_sql_query", return_value=mock_drives_df
+        "teslamate_platform.export.export_parquet.pd.read_sql_query",
+        return_value=mock_drives_df,
     ):
-        with patch("src.export.export_parquet.pq.write_table") as mock_write:
-            from src.export.export_parquet import export_drives
+        with patch(
+            "teslamate_platform.export.export_parquet.pq.write_table"
+        ) as mock_write:
+            from teslamate_platform.export.export_parquet import export_drives
 
             count = export_drives(mock_db_connection, "2026-10-07", "test-bucket")
 
@@ -73,8 +76,9 @@ def test_export_drives_success(mock_db_connection, mock_drives_df):
             mock_write.assert_called_once()
             call_args = mock_write.call_args
             # First arg is table, second is path
-            assert "s3://test-bucket/raw/drives/date=2026-10-07/drives.parquet" in str(
-                call_args
+            assert (
+                "s3://test-bucket/bronze/drives/date=2026-10-07/drives.parquet"
+                in str(call_args)
             )
 
 
@@ -82,8 +86,11 @@ def test_export_drives_no_data(mock_db_connection):
     """Test drives export with no data."""
     empty_df = pd.DataFrame()
 
-    with patch("src.export.export_parquet.pd.read_sql_query", return_value=empty_df):
-        from src.export.export_parquet import export_drives
+    with patch(
+        "teslamate_platform.export.export_parquet.pd.read_sql_query",
+        return_value=empty_df,
+    ):
+        from teslamate_platform.export.export_parquet import export_drives
 
         count = export_drives(mock_db_connection, "2026-10-07", "test-bucket")
 
@@ -93,10 +100,13 @@ def test_export_drives_no_data(mock_db_connection):
 def test_export_charges_success(mock_db_connection, mock_charges_df):
     """Test successful charges export."""
     with patch(
-        "src.export.export_parquet.pd.read_sql_query", return_value=mock_charges_df
+        "teslamate_platform.export.export_parquet.pd.read_sql_query",
+        return_value=mock_charges_df,
     ):
-        with patch("src.export.export_parquet.pq.write_table") as mock_write:
-            from src.export.export_parquet import export_charges
+        with patch(
+            "teslamate_platform.export.export_parquet.pq.write_table"
+        ) as mock_write:
+            from teslamate_platform.export.export_parquet import export_charges
 
             count = export_charges(mock_db_connection, "2026-10-07", "test-bucket")
 
@@ -105,7 +115,7 @@ def test_export_charges_success(mock_db_connection, mock_charges_df):
             call_args = mock_write.call_args
             # First arg is table, second is path
             assert (
-                "s3://test-bucket/raw/charges/date=2026-10-07/charges.parquet"
+                "s3://test-bucket/bronze/charges/date=2026-10-07/charges.parquet"
                 in str(call_args)
             )
 
@@ -114,8 +124,11 @@ def test_export_charges_no_data(mock_db_connection):
     """Test charges export with no data."""
     empty_df = pd.DataFrame()
 
-    with patch("src.export.export_parquet.pd.read_sql_query", return_value=empty_df):
-        from src.export.export_parquet import export_charges
+    with patch(
+        "teslamate_platform.export.export_parquet.pd.read_sql_query",
+        return_value=empty_df,
+    ):
+        from teslamate_platform.export.export_parquet import export_charges
 
         count = export_charges(mock_db_connection, "2026-10-07", "test-bucket")
 
@@ -125,10 +138,13 @@ def test_export_charges_no_data(mock_db_connection):
 def test_export_drives_custom_prefix(mock_db_connection, mock_drives_df):
     """Test drives export with custom S3 prefix."""
     with patch(
-        "src.export.export_parquet.pd.read_sql_query", return_value=mock_drives_df
+        "teslamate_platform.export.export_parquet.pd.read_sql_query",
+        return_value=mock_drives_df,
     ):
-        with patch("src.export.export_parquet.pq.write_table") as mock_write:
-            from src.export.export_parquet import export_drives
+        with patch(
+            "teslamate_platform.export.export_parquet.pq.write_table"
+        ) as mock_write:
+            from teslamate_platform.export.export_parquet import export_drives
 
             export_drives(
                 mock_db_connection, "2026-10-07", "test-bucket", s3_prefix="custom/path"
@@ -142,9 +158,11 @@ def test_export_drives_custom_prefix(mock_db_connection, mock_drives_df):
 
 def test_get_db_connection():
     """Test database connection function signature."""
-    from src.export.export_parquet import get_db_connection
+    from teslamate_platform.export.export_parquet import get_db_connection
 
-    with patch("src.export.export_parquet.psycopg2.connect") as mock_connect:
+    with patch(
+        "teslamate_platform.export.export_parquet.psycopg2.connect"
+    ) as mock_connect:
         mock_connect.return_value = MagicMock()
 
         conn = get_db_connection(
@@ -170,7 +188,7 @@ def test_drives_query_columns():
     # Extract the SQL query from the function
     import inspect
 
-    from src.export.export_parquet import export_drives
+    from teslamate_platform.export.export_parquet import export_drives
 
     source = inspect.getsource(export_drives)
 
@@ -193,7 +211,7 @@ def test_charges_query_columns():
     # Extract the SQL query from the function
     import inspect
 
-    from src.export.export_parquet import export_charges
+    from teslamate_platform.export.export_parquet import export_charges
 
     source = inspect.getsource(export_charges)
 
@@ -210,7 +228,7 @@ def test_drives_parquet_schema_matches_glue():
     """Test that drives Parquet schema matches Glue table definition."""
     import inspect
 
-    from src.export.export_parquet import export_drives
+    from teslamate_platform.export.export_parquet import export_drives
 
     source = inspect.getsource(export_drives)
 
@@ -238,7 +256,7 @@ def test_charges_parquet_schema_matches_glue():
     """Test that charges Parquet schema matches Glue table definition."""
     import inspect
 
-    from src.export.export_parquet import export_charges
+    from teslamate_platform.export.export_parquet import export_charges
 
     source = inspect.getsource(export_charges)
 
@@ -279,7 +297,7 @@ def test_kwh_and_efficiency_calculations():
     """
     import inspect
 
-    from src.export.export_parquet import export_drives
+    from teslamate_platform.export.export_parquet import export_drives
 
     source = inspect.getsource(export_drives)
 
@@ -318,8 +336,11 @@ def test_kwh_and_efficiency_calculations():
         }
     )
 
-    with patch("src.export.export_parquet.pd.read_sql_query", return_value=mock_df):
-        with patch("src.export.export_parquet.pq.write_table"):
+    with patch(
+        "teslamate_platform.export.export_parquet.pd.read_sql_query",
+        return_value=mock_df,
+    ):
+        with patch("teslamate_platform.export.export_parquet.pq.write_table"):
             _ = export_drives(mock_conn, "2026-10-09", "test-bucket")
 
             # Verify calculations are in plausible ranges
