@@ -65,7 +65,9 @@ def test_export_drives_success(mock_db_connection, mock_drives_df):
         "teslamate_platform.export.export_parquet.pd.read_sql_query",
         return_value=mock_drives_df,
     ):
-        with patch("teslamate_platform.export.export_parquet.pq.write_table") as mock_write:
+        with patch(
+            "teslamate_platform.export.export_parquet.pq.write_table"
+        ) as mock_write:
             from teslamate_platform.export.export_parquet import export_drives
 
             count = export_drives(mock_db_connection, "2026-10-07", "test-bucket")
@@ -101,7 +103,9 @@ def test_export_charges_success(mock_db_connection, mock_charges_df):
         "teslamate_platform.export.export_parquet.pd.read_sql_query",
         return_value=mock_charges_df,
     ):
-        with patch("teslamate_platform.export.export_parquet.pq.write_table") as mock_write:
+        with patch(
+            "teslamate_platform.export.export_parquet.pq.write_table"
+        ) as mock_write:
             from teslamate_platform.export.export_parquet import export_charges
 
             count = export_charges(mock_db_connection, "2026-10-07", "test-bucket")
@@ -137,7 +141,9 @@ def test_export_drives_custom_prefix(mock_db_connection, mock_drives_df):
         "teslamate_platform.export.export_parquet.pd.read_sql_query",
         return_value=mock_drives_df,
     ):
-        with patch("teslamate_platform.export.export_parquet.pq.write_table") as mock_write:
+        with patch(
+            "teslamate_platform.export.export_parquet.pq.write_table"
+        ) as mock_write:
             from teslamate_platform.export.export_parquet import export_drives
 
             export_drives(
@@ -145,9 +151,8 @@ def test_export_drives_custom_prefix(mock_db_connection, mock_drives_df):
             )
 
             call_args = mock_write.call_args
-            assert (
-                "s3://test-bucket/custom/path/date=2026-10-07/drives.parquet"
-                in str(call_args)
+            assert "s3://test-bucket/custom/path/date=2026-10-07/drives.parquet" in str(
+                call_args
             )
 
 
