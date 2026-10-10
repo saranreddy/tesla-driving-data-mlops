@@ -82,7 +82,9 @@ def test_export_drives_no_data(mock_db_connection):
     """Test drives export with no data."""
     empty_df = pd.DataFrame()
 
-    with patch("platform.export.export_parquet.pd.read_sql_query", return_value=empty_df):
+    with patch(
+        "platform.export.export_parquet.pd.read_sql_query", return_value=empty_df
+    ):
         from platform.export.export_parquet import export_drives
 
         count = export_drives(mock_db_connection, "2026-10-07", "test-bucket")
@@ -113,7 +115,9 @@ def test_export_charges_no_data(mock_db_connection):
     """Test charges export with no data."""
     empty_df = pd.DataFrame()
 
-    with patch("platform.export.export_parquet.pd.read_sql_query", return_value=empty_df):
+    with patch(
+        "platform.export.export_parquet.pd.read_sql_query", return_value=empty_df
+    ):
         from platform.export.export_parquet import export_charges
 
         count = export_charges(mock_db_connection, "2026-10-07", "test-bucket")
