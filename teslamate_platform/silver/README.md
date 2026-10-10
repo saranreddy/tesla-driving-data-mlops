@@ -1,4 +1,4 @@
-# Silver Layer - Quality-Checked Data
+# 🥈 Silver Layer — Quality Checks & Data Cleaning
 
 ## Overview
 

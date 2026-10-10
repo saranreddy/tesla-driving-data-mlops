@@ -1,4 +1,4 @@
-# Bronze Layer - Raw TeslaMate Data
+# 🥉 Bronze Layer — Raw Telemetry from TeslaMate
 
 ## Overview
 

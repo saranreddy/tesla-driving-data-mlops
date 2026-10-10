@@ -1,4 +1,4 @@
-# Gold Layer - Insurance Use Case
+# 🥇 Gold Layer — Insurance Risk Scoring
 
 ## Overview
 

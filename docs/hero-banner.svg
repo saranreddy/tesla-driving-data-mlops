@@ -1,0 +1,109 @@
+<svg width="1200" height="300" xmlns="http://www.w3.org/2000/svg">
+  <!-- Dark background with gradient -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0e27;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1a1f3a;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#e82127;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#cc0000;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1200" height="300" fill="url(#bgGradient)"/>
+  
+  <!-- Subtle grid pattern -->
+  <g opacity="0.05">
+    <line x1="0" y1="60" x2="1200" y2="60" stroke="#fff" stroke-width="1"/>
+    <line x1="0" y1="120" x2="1200" y2="120" stroke="#fff" stroke-width="1"/>
+    <line x1="0" y1="180" x2="1200" y2="180" stroke="#fff" stroke-width="1"/>
+    <line x1="0" y1="240" x2="1200" y2="240" stroke="#fff" stroke-width="1"/>
+    <line x1="200" y1="0" x2="200" y2="300" stroke="#fff" stroke-width="1"/>
+    <line x1="400" y1="0" x2="400" y2="300" stroke="#fff" stroke-width="1"/>
+    <line x1="600" y1="0" x2="600" y2="300" stroke="#fff" stroke-width="1"/>
+    <line x1="800" y1="0" x2="800" y2="300" stroke="#fff" stroke-width="1"/>
+    <line x1="1000" y1="0" x2="1000" y2="300" stroke="#fff" stroke-width="1"/>
+  </g>
+  
+  <!-- Tesla-style car icon (simplified) -->
+  <g transform="translate(80, 80)">
+    <ellipse cx="60" cy="70" rx="45" ry="20" fill="#e82127" opacity="0.3"/>
+    <path d="M 20 60 Q 20 40 60 40 Q 100 40 100 60 L 95 80 Q 90 85 60 85 Q 30 85 25 80 Z" 
+          fill="url(#accentGradient)" filter="url(#glow)"/>
+    <circle cx="35" cy="85" r="12" fill="#0a0e27" stroke="#e82127" stroke-width="3"/>
+    <circle cx="85" cy="85" r="12" fill="#0a0e27" stroke="#e82127" stroke-width="3"/>
+    <rect x="45" y="48" width="30" height="20" rx="2" fill="#0a0e27" opacity="0.6"/>
+  </g>
+  
+  <!-- Data stream visualization -->
+  <g opacity="0.4">
+    <circle cx="200" cy="150" r="4" fill="#00ff88">
+      <animate attributeName="opacity" values="0;1;0" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="240" cy="140" r="4" fill="#00ff88">
+      <animate attributeName="opacity" values="0;1;0" dur="2s" begin="0.3s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="280" cy="160" r="4" fill="#00ff88">
+      <animate attributeName="opacity" values="0;1;0" dur="2s" begin="0.6s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="320" cy="145" r="4" fill="#00ff88">
+      <animate attributeName="opacity" values="0;1;0" dur="2s" begin="0.9s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+  <!-- Project title -->
+  <text x="380" y="130" font-family="'SF Pro Display', -apple-system, system-ui, sans-serif" 
+        font-size="56" font-weight="700" fill="#ffffff" letter-spacing="-1">
+    Tesla MLOps
+  </text>
+  
+  <!-- Tagline -->
+  <text x="380" y="170" font-family="'SF Pro Display', -apple-system, system-ui, sans-serif" 
+        font-size="24" font-weight="300" fill="#00ff88" letter-spacing="0.5">
+    Insurance-Grade Driving Risk Scoring
+  </text>
+  
+  <!-- Subtitle -->
+  <text x="380" y="205" font-family="'SF Pro Text', -apple-system, system-ui, sans-serif" 
+        font-size="16" font-weight="400" fill="#8892b0" letter-spacing="0.3">
+    From Raw Telemetry ’ Quality-Checked Data ’ Transparent Risk Scores
+  </text>
+  
+  <!-- Tech stack pills -->
+  <g transform="translate(380, 225)">
+    <rect x="0" y="0" width="80" height="24" rx="12" fill="#232f3e" opacity="0.8"/>
+    <text x="40" y="16" font-family="sans-serif" font-size="12" font-weight="600" 
+          fill="#ff9900" text-anchor="middle">AWS</text>
+    
+    <rect x="90" y="0" width="110" height="24" rx="12" fill="#844fba" opacity="0.8"/>
+    <text x="145" y="16" font-family="sans-serif" font-size="12" font-weight="600" 
+          fill="#ffffff" text-anchor="middle">Terraform</text>
+    
+    <rect x="210" y="0" width="90" height="24" rx="12" fill="#326ce5" opacity="0.8"/>
+    <text x="255" y="16" font-family="sans-serif" font-size="12" font-weight="600" 
+          fill="#ffffff" text-anchor="middle">Python</text>
+    
+    <rect x="310" y="0" width="100" height="24" rx="12" fill="#e82127" opacity="0.8"/>
+    <text x="360" y="16" font-family="sans-serif" font-size="12" font-weight="600" 
+          fill="#ffffff" text-anchor="middle">TeslaMate</text>
+  </g>
+  
+  <!-- Cost badge in corner -->
+  <g transform="translate(1040, 40)">
+    <rect x="0" y="0" width="120" height="40" rx="8" fill="#00ff88" opacity="0.15" 
+          stroke="#00ff88" stroke-width="2"/>
+    <text x="60" y="18" font-family="sans-serif" font-size="13" font-weight="700" 
+          fill="#00ff88" text-anchor="middle">~$12/month</text>
+    <text x="60" y="32" font-family="sans-serif" font-size="10" font-weight="400" 
+          fill="#8892b0" text-anchor="middle">All-in AWS cost</text>
+  </g>
+</svg>
