@@ -65,7 +65,7 @@ def test_export_drives_success(mock_db_connection, mock_drives_df):
         "teslamate_platform.export.export_parquet.pd.read_sql_query",
         return_value=mock_drives_df,
     ):
-        with patch("pandas.DataFrame.to_parquet") as mock_to_parquet:
+        with patch("teslamate_platform.export.export_parquet.pq.write_table") as mock_write:
             from teslamate_platform.export.export_parquet import export_drives
 
             count = export_drives(mock_db_connection, "2026-10-07", "test-bucket")
@@ -100,7 +100,7 @@ def test_export_charges_success(mock_db_connection, mock_charges_df):
         "teslamate_platform.export.export_parquet.pd.read_sql_query",
         return_value=mock_charges_df,
     ):
-        with patch("pandas.DataFrame.to_parquet") as mock_to_parquet:
+        with patch("teslamate_platform.export.export_parquet.pq.write_table") as mock_write:
             from teslamate_platform.export.export_parquet import export_charges
 
             count = export_charges(mock_db_connection, "2026-10-07", "test-bucket")
@@ -135,7 +135,7 @@ def test_export_drives_custom_prefix(mock_db_connection, mock_drives_df):
         "teslamate_platform.export.export_parquet.pd.read_sql_query",
         return_value=mock_drives_df,
     ):
-        with patch("pandas.DataFrame.to_parquet") as mock_to_parquet:
+        with patch("teslamate_platform.export.export_parquet.pq.write_table") as mock_write:
             from teslamate_platform.export.export_parquet import export_drives
 
             export_drives(
