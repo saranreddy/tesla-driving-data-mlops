@@ -167,10 +167,10 @@ def test_get_db_connection():
 
 def test_drives_query_columns():
     """Test that drives query uses correct TeslaMate column names."""
-    from src.export.export_parquet import export_drives
-
     # Extract the SQL query from the function
     import inspect
+
+    from src.export.export_parquet import export_drives
 
     source = inspect.getsource(export_drives)
 
@@ -190,10 +190,10 @@ def test_drives_query_columns():
 
 def test_charges_query_columns():
     """Test that charges query uses correct TeslaMate column names."""
-    from src.export.export_parquet import export_charges
-
     # Extract the SQL query from the function
     import inspect
+
+    from src.export.export_parquet import export_charges
 
     source = inspect.getsource(export_charges)
 
