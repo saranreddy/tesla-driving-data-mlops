@@ -8,7 +8,7 @@ import argparse
 import logging
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import pandas as pd
@@ -67,8 +67,8 @@ def export_drives(
         d.start_km,
         d.end_km,
         d.start_rated_range_km - d.end_rated_range_km as kwh_used,
-        d.start_ideal_battery_range_km as start_battery_level,
-        d.end_ideal_battery_range_km as end_battery_level,
+        sp.battery_level as start_battery_level,
+        ep.battery_level as end_battery_level,
         d.outside_temp_avg,
         d.speed_max,
         CASE
@@ -78,6 +78,8 @@ def export_drives(
     FROM drives d
     LEFT JOIN addresses sa ON d.start_address_id = sa.id
     LEFT JOIN addresses ea ON d.end_address_id = ea.id
+    LEFT JOIN positions sp ON d.start_position_id = sp.id
+    LEFT JOIN positions ep ON d.end_position_id = ep.id
     WHERE DATE(d.start_date) = %s
     ORDER BY d.start_date
     """
@@ -125,8 +127,8 @@ def export_charges(
         c.end_date,
         a.display_name as address,
         c.charge_energy_added,
-        c.start_ideal_battery_range_km as start_battery_level,
-        c.end_ideal_battery_range_km as end_battery_level,
+        c.start_battery_level,
+        c.end_battery_level,
         EXTRACT(EPOCH FROM (c.end_date - c.start_date)) / 60 as duration_min,
         c.cost
     FROM charging_processes c
@@ -177,7 +179,7 @@ def main():
     if args.date:
         date_str = args.date
     else:
-        yesterday = datetime.utcnow().date() - timedelta(days=1)
+        yesterday = (datetime.now(timezone.utc).date() - timedelta(days=1))
         date_str = yesterday.strftime("%Y-%m-%d")
 
     db_password = args.db_password or os.environ.get("POSTGRES_PASSWORD")

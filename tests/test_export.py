@@ -163,3 +163,44 @@ def test_get_db_connection():
             dbname="testdb",
         )
         assert conn is not None
+
+
+def test_drives_query_columns():
+    """Test that drives query uses correct TeslaMate column names."""
+    from src.export.export_parquet import export_drives
+
+    # Extract the SQL query from the function
+    import inspect
+
+    source = inspect.getsource(export_drives)
+
+    # Verify correct column references (not the wrong ones)
+    assert "start_ideal_battery_range_km" not in source
+    assert "end_ideal_battery_range_km" not in source
+
+    # Verify it joins with positions for battery_level
+    assert "positions sp" in source or "positions AS sp" in source
+    assert "sp.battery_level" in source
+    assert "ep.battery_level" in source
+
+    # Verify it has position joins
+    assert "start_position_id" in source
+    assert "end_position_id" in source
+
+
+def test_charges_query_columns():
+    """Test that charges query uses correct TeslaMate column names."""
+    from src.export.export_parquet import export_charges
+
+    # Extract the SQL query from the function
+    import inspect
+
+    source = inspect.getsource(export_charges)
+
+    # Verify correct column references (not the wrong ones)
+    assert "start_ideal_battery_range_km" not in source
+    assert "end_ideal_battery_range_km" not in source
+
+    # Verify it uses the direct columns from charging_processes
+    assert "c.start_battery_level" in source
+    assert "c.end_battery_level" in source
