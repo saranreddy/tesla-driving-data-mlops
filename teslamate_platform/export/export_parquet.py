@@ -45,15 +45,15 @@ def export_drives(
     conn: psycopg2.extensions.connection,
     date_str: str,
     s3_bucket: str,
-    s3_prefix: str = "raw/drives",
+    s3_prefix: str = "bronze/drives",
 ) -> int:
-    """Export drives for a given date to S3 Parquet.
+    """Export drives for a given date to S3 Parquet (bronze layer).
 
     Args:
         conn: PostgreSQL database connection
         date_str: Date to export in YYYY-MM-DD format
         s3_bucket: S3 bucket name
-        s3_prefix: S3 prefix for drives data
+        s3_prefix: S3 prefix for drives data (default: bronze/drives)
 
     Returns:
         Number of drives exported
@@ -169,15 +169,15 @@ def export_charges(
     conn: psycopg2.extensions.connection,
     date_str: str,
     s3_bucket: str,
-    s3_prefix: str = "raw/charges",
+    s3_prefix: str = "bronze/charges",
 ) -> int:
-    """Export charges for a given date to S3 Parquet.
+    """Export charges for a given date to S3 Parquet (bronze layer).
 
     Args:
         conn: PostgreSQL database connection
         date_str: Date to export in YYYY-MM-DD format
         s3_bucket: S3 bucket name
-        s3_prefix: S3 prefix for charges data
+        s3_prefix: S3 prefix for charges data (default: bronze/charges)
 
     Returns:
         Number of charges exported
@@ -249,6 +249,124 @@ def export_charges(
     return len(df)
 
 
+def export_positions(
+    conn: psycopg2.extensions.connection,
+    date_str: str,
+    s3_bucket: str,
+    s3_prefix: str = "bronze/positions",
+) -> int:
+    """Export position readings for finished drives to S3 Parquet (bronze layer).
+
+    Args:
+        conn: PostgreSQL database connection
+        date_str: Date to export in YYYY-MM-DD format
+        s3_bucket: S3 bucket name
+        s3_prefix: S3 prefix for positions data (default: bronze/positions)
+
+    Returns:
+        Number of positions exported
+    """
+    query = """
+    SELECT
+        p.id,
+        p.drive_id,
+        p.date as timestamp,
+        p.latitude,
+        p.longitude,
+        p.speed,
+        p.power,
+        p.odometer,
+        p.ideal_battery_range_km,
+        p.battery_level,
+        p.outside_temp,
+        p.elevation,
+        p.fan_status,
+        p.driver_temp_setting,
+        p.passenger_temp_setting,
+        p.is_climate_on,
+        p.is_rear_defroster_on,
+        p.is_front_defroster_on
+    FROM positions p
+    INNER JOIN drives d ON p.drive_id = d.id
+    WHERE DATE(d.start_date) = %s
+    ORDER BY p.drive_id, p.date
+    """
+
+    df = pd.read_sql_query(query, conn, params=(date_str,))
+
+    if df.empty:
+        logger.info(f"No positions found for {date_str}")
+        return 0
+
+    # Cast to exact types
+    # bigint: id, drive_id
+    df["id"] = df["id"].astype("int64")
+    df["drive_id"] = df["drive_id"].astype("int64")
+
+    # timestamp: timestamp (convert to ms precision for Athena)
+    df["timestamp"] = pd.to_datetime(df["timestamp"]).dt.floor("ms")
+
+    # double: latitude, longitude, speed, power, odometer,
+    #         ideal_battery_range_km, outside_temp, elevation
+    for col in [
+        "latitude",
+        "longitude",
+        "speed",
+        "power",
+        "odometer",
+        "ideal_battery_range_km",
+        "outside_temp",
+        "elevation",
+    ]:
+        df[col] = df[col].astype("float64")
+
+    # int: battery_level, fan_status, driver_temp_setting,
+    #      passenger_temp_setting (nullable)
+    for col in [
+        "battery_level",
+        "fan_status",
+        "driver_temp_setting",
+        "passenger_temp_setting",
+    ]:
+        df[col] = df[col].astype("Int32")
+
+    # boolean: is_climate_on, is_rear_defroster_on, is_front_defroster_on
+    for col in ["is_climate_on", "is_rear_defroster_on", "is_front_defroster_on"]:
+        df[col] = df[col].astype("bool")
+
+    s3_key = f"{s3_prefix}/date={date_str}/positions.parquet"
+
+    # Write with explicit schema
+    schema = pa.schema(
+        [
+            ("id", pa.int64()),
+            ("drive_id", pa.int64()),
+            ("timestamp", pa.timestamp("ms")),
+            ("latitude", pa.float64()),
+            ("longitude", pa.float64()),
+            ("speed", pa.float64()),
+            ("power", pa.float64()),
+            ("odometer", pa.float64()),
+            ("ideal_battery_range_km", pa.float64()),
+            ("battery_level", pa.int32()),
+            ("outside_temp", pa.float64()),
+            ("elevation", pa.float64()),
+            ("fan_status", pa.int32()),
+            ("driver_temp_setting", pa.int32()),
+            ("passenger_temp_setting", pa.int32()),
+            ("is_climate_on", pa.bool_()),
+            ("is_rear_defroster_on", pa.bool_()),
+            ("is_front_defroster_on", pa.bool_()),
+        ]
+    )
+
+    table = pa.Table.from_pandas(df, schema=schema)
+    pq.write_table(table, f"s3://{s3_bucket}/{s3_key}")
+
+    logger.info(f"Exported {len(df)} positions to s3://{s3_bucket}/{s3_key}")
+    return len(df)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Export TeslaMate data to Parquet in S3"
@@ -296,8 +414,12 @@ def main():
 
         drives_count = export_drives(conn, date_str, args.s3_bucket)
         charges_count = export_charges(conn, date_str, args.s3_bucket)
+        positions_count = export_positions(conn, date_str, args.s3_bucket)
 
-        logger.info(f"Export complete: {drives_count} drives, {charges_count} charges")
+        logger.info(
+            f"Export complete: {drives_count} drives, {charges_count} charges, "
+            f"{positions_count} positions"
+        )
 
         conn.close()
 

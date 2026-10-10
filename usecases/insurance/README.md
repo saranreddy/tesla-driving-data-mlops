@@ -1,101 +1,232 @@
-# Insurance Use Case: Driving Risk Score
+# Gold Layer - Insurance Use Case
 
 ## Overview
 
-This module implements a transparent insurance-style driving risk scoring system. Per-trip features are extracted from TeslaMate data and combined into a weighted 0-100 risk score with human-readable explanations.
+The gold layer contains business-specific, curated data ready for analytics and ML. The **insurance use case** extracts driving behavior features and generates transparent risk scores from silver layer data.
 
-**Status:** Skeleton only. No code yet.
+**Input:** Silver layer (quality-checked data)  
+**Output:** `s3://<bucket>/usecases/insurance/gold/` → Glue database `teslamate_insurance`
 
-## Planned Features
-
-The scoring system will evaluate trips based on:
-
-1. **Hard Braking** — Frequency and intensity of rapid deceleration events
-2. **Hard Acceleration** — Frequency and intensity of rapid acceleration events  
-3. **Speeding** — Time spent above speed limits (estimated from road type when GPS speed limit data is unavailable)
-4. **Night Driving** — Proportion of driving between 10 PM and 5 AM local time
-5. **Highway Share** — Proportion of miles driven on highways vs. residential/urban roads (proxy: sustained high speeds)
-
-## Scoring Approach
-
-The risk score will be a weighted combination of the above features:
+## Architecture
 
 ```
-risk_score = w1 * hard_braking_score 
-           + w2 * hard_acceleration_score
-           + w3 * speeding_score
-           + w4 * night_driving_score
-           + w5 * highway_score
+Silver Layer (good trips only)
+  ↓
+Feature Extraction (extract_features.py)
+  ↓
+ins_trip_features
+  ↓
+Risk Scoring (generate_scores.py)
+  ↓
+ins_trip_scores
 ```
 
-Where weights (w1-w5) are assumption-based and sum to 100.
+## Output Tables
 
-**Score range:** 0-100 (lower is better)
-- **0-30:** Low risk (safe driver)
-- **31-60:** Moderate risk (average driver)
-- **61-100:** High risk (risky driving patterns)
+### ins_trip_features
+- **Location:** `s3://<bucket>/usecases/insurance/gold/ins_trip_features/date=YYYY-MM-DD/`
+- **Description:** Driving behavior features per trip
+- **Schema:**
+  - `drive_id` (bigint): Trip ID (links to silver_drives)
+  - `date` (date): Trip date
+  - `hard_brakes_per_100mi` (double): Hard braking events per 100 miles
+  - `hard_accels_per_100mi` (double): Hard acceleration events per 100 miles
+  - `pct_time_over_80mph` (double): % of time speeding >80 mph (~129 km/h)
+  - `night_minutes` (double): Minutes driven 10 PM - 6 AM
+  - `pct_highway` (double): % highway driving (speed >90 km/h sustained)
+  - `miles` (double): Distance in miles
+  - `duration_hours` (double): Trip duration in hours
+  - `avg_temp_f` (double): Average temperature in Fahrenheit
+  - `wh_per_km` (double): Energy efficiency (Wh/km)
 
-Each score includes a breakdown showing which factors contributed most.
+### ins_trip_scores
+- **Location:** `s3://<bucket>/usecases/insurance/gold/ins_trip_scores/date=YYYY-MM-DD/`
+- **Description:** Insurance risk scores (0-100, lower = safer)
+- **Schema:**
+  - `drive_id` (bigint): Trip ID
+  - `date` (date): Trip date
+  - `risk_score` (double): Composite risk score (0-100)
+  - `score_category` (string): `excellent` / `good` / `average` / `below_average` / `poor`
+  - `top_risk_factors` (string): Comma-separated top contributing factors
 
-## Honest Limits
+## Feature Definitions
 
-This is a demonstration portfolio project, not a production insurance model:
+### Hard Braking / Acceleration
+- **Detection:** Acceleration/deceleration exceeds ±3.0 m/s²
+- **Computation:** Count events, normalize to per-100-miles
+- **Data Source:** `silver_positions` (1-second readings)
 
-- **Single car:** Trained only on one driver's data from one vehicle
-- **Assumption-based weights:** Feature weights are set by educated guesses, not optimized on crash/claim data
-- **Not trained on crash data:** This model has never seen actual accident or insurance claim outcomes
-- **No validation against real insurance risk:** Scores may not correlate with actual accident probability
-- **Synthetic data for testing:** Sample trips are generated, not drawn from a large real-world dataset
+### Speeding
+- **Threshold:** >80 mph (~129 km/h)
+- **Computation:** % of position readings above threshold
+- **Insurance rationale:** High-speed driving correlates with accident risk
 
-Use this as a learning example of feature engineering, scoring systems, and MLOps patterns—not as a production risk assessment tool.
+### Night Driving
+- **Definition:** 10 PM - 6 AM local time
+- **Computation:** Minutes driven during night hours
+- **Insurance rationale:** Fatigue and visibility risks
 
-## Pipeline
+### Highway Driving
+- **Heuristic:** Sustained speed >90 km/h (~56 mph)
+- **Computation:** % of position readings on highway
+- **Insurance rationale:** Highway miles are *safer* (bonus, not penalty)
 
-When implemented, the SageMaker pipeline will follow the pattern from [sagemaker-mlops-pipeline-starter](https://github.com/saranreddy/sagemaker-mlops-pipeline-starter):
+### Energy Efficiency
+- **Metric:** Wh/km from silver_drives
+- **Use:** Proxy for driving smoothness (informational, not scored)
 
-1. **Processing:** Feature extraction from raw drives in S3
-2. **Scoring:** Apply weighted scoring logic (no training step; this is a rule-based system)
-3. **Evaluation:** Compare scores across time periods and flag unusual patterns
-4. **Registration:** Store scoring artifacts in Model Registry for versioning
+## Risk Scoring Model
 
-## Module Structure
+### Weights (`scoring_config.yaml`)
 
+| Factor | Weight | Rationale |
+|--------|--------|-----------|
+| Hard braking | 25% | Indicates aggressive/reactive driving |
+| Hard acceleration | 20% | Indicates aggressive driving |
+| Speeding | 30% | Highest accident correlation |
+| Night driving | 15% | Fatigue/visibility risks |
+| Highway bonus | -10% | Highway miles are statistically safer |
+
+**Weights sum to 100%** and are fully transparent and configurable.
+
+### Normalization
+
+Raw features are normalized to 0-100 scale:
+
+- **Hard events:** Max at 20 events per 100 mi
+- **Speeding:** Max at 50% time over limit
+- **Night driving:** Max at 30 min/hour
+- **Highway:** Bonus above 50% baseline
+
+### Score Categories
+
+| Score | Category | Description |
+|-------|----------|-------------|
+| 0-20 | Excellent | Very safe driver |
+| 21-40 | Good | Safe driver |
+| 41-60 | Average | Typical driver |
+| 61-80 | Below average | Risky behaviors present |
+| 81-100 | Poor | Very risky driver |
+
+### Top Risk Factors
+
+Identifies up to 3 factors contributing >5 points to the score:
+- `hard_braking`
+- `hard_acceleration`
+- `speeding`
+- `night_driving`
+- `safe_driver` (if score is low and no major factor)
+
+## Execution
+
+### Feature Extraction
+**Script:** `usecases/insurance/gold/extract_features.py`  
+**Schedule:** Nightly after silver (9:10 PM CT)
+
+```bash
+/opt/teslamate/venv/bin/python /opt/teslamate/insurance/extract_features.py \
+  --s3-bucket <bucket-name> \
+  --date YYYY-MM-DD
 ```
-usecases/insurance/
-├── README.md              (this file)
-├── features/              Feature extraction from TeslaMate drives
-│   └── README.md          (Feature definitions and extraction logic)
-├── scoring/               Weighted scoring and explanation logic
-│   └── README.md          (Scoring formula and weight definitions)
-├── pipeline/              SageMaker pipeline orchestration
-│   └── README.md          (Pipeline definition and execution)
-└── synthetic/             Synthetic trip generation for testing
-    └── README.md          (Synthetic data generation and labeling)
+
+### Score Generation
+**Script:** `usecases/insurance/gold/generate_scores.py`  
+**Schedule:** Nightly after features (9:15 PM CT)
+
+```bash
+/opt/teslamate/venv/bin/python /opt/teslamate/insurance/generate_scores.py \
+  --s3-bucket <bucket-name> \
+  --date YYYY-MM-DD \
+  --config /opt/teslamate/insurance/scoring_config.yaml
 ```
 
-## Data Sources
+## Data Transformations
 
-This module reads from the shared platform data:
+### From Silver to Gold
 
-- **S3 raw drives:** `s3://<bucket>/raw/drives/date=YYYY-MM-DD/drives.parquet`
-- **Glue table:** `teslamate_mlops_data.drives`
+1. **Filter flagged trips:**
+   - Only processes `silver_drives` where `quality_flag = false`
+   - Skips trips with data quality issues
 
-All outputs are written to:
+2. **Unit conversions:**
+   - km → miles (×0.621371)
+   - Celsius → Fahrenheit (×9/5 + 32)
+   - m/s² thresholds for acceleration
 
-- **S3 prefix:** `s3://<bucket>/usecases/insurance/`
-- **Glue tables:** Prefixed with `insurance_*` (e.g., `insurance_trip_scores`)
+3. **Aggregations:**
+   - Count hard events across 1-second readings
+   - Compute time-based percentages
+   - Normalize to standard trip length (per 100 mi)
 
-## Module Isolation
+4. **Scoring:**
+   - Weighted combination of normalized factors
+   - Clamped to 0-100 range
+   - Top contributors identified
 
-Per the repository rules:
+## Querying Gold Data
 
-- This module **reads from** the shared platform data (drives, charges) but **does not modify** it
-- This module **never reads from** other use case modules
-- All outputs are scoped to the `usecases/insurance/` S3 prefix and Glue table namespace
+### Trip Features
+```sql
+SELECT drive_id, miles, hard_brakes_per_100mi, pct_time_over_80mph
+FROM teslamate_insurance.ins_trip_features
+WHERE date = '2026-10-09'
+ORDER BY hard_brakes_per_100mi DESC
+```
+
+### Risk Distribution
+```sql
+SELECT score_category, COUNT(*) as trip_count, AVG(risk_score) as avg_score
+FROM teslamate_insurance.ins_trip_scores
+WHERE date >= '2026-10-01' AND date <= '2026-10-31'
+GROUP BY score_category
+ORDER BY avg_score
+```
+
+### Risky Trips
+```sql
+SELECT s.drive_id, s.risk_score, s.top_risk_factors,
+       f.hard_brakes_per_100mi, f.pct_time_over_80mph
+FROM teslamate_insurance.ins_trip_scores s
+JOIN teslamate_insurance.ins_trip_features f ON s.drive_id = f.drive_id
+WHERE s.date = '2026-10-09'
+  AND s.risk_score > 60
+ORDER BY s.risk_score DESC
+```
+
+## Assumptions & Limitations
+
+### Documented Assumptions
+1. **Hard event thresholds (±3.0 m/s²):** Based on NHTSA research; configurable in code
+2. **Speeding threshold (80 mph):** Common insurance policy limit
+3. **Night hours (10 PM - 6 AM):** Standard definition; time zone is UTC
+4. **Highway heuristic (>90 km/h):** Approximation; no road type data available
+5. **Scoring weights:** Derived from insurance industry benchmarks; fully transparent
+
+### Known Limitations
+- **No road type data:** Highway driving inferred from speed
+- **No weather data:** Temperature only; rain/snow unknown
+- **No traffic data:** Cannot distinguish congestion from voluntary slowing
+- **GPS accuracy:** Hard events may include false positives from GPS jitter
+- **Single vehicle:** Multi-vehicle fleet behavior not analyzed
+
+### Future Enhancements
+- [ ] Weather API integration (rain/snow penalties)
+- [ ] Road type from OSM (true highway vs surface streets)
+- [ ] Traffic-adjusted scoring (don't penalize congestion slowdowns)
+- [ ] Comparative scoring (percentile vs fleet average)
+- [ ] Monthly/annual aggregates (trend analysis)
+
+## Testing
+
+See `tests/test_gold/` for:
+- Feature extraction with synthetic trips
+- Scoring logic with known inputs
+- Edge cases (zero distance, missing positions, etc.)
+- Real trip fixture (40.4 km Model S 100D trip)
 
 ## Next Steps
 
-1. Implement feature extraction logic in `features/`
-2. Define scoring weights and logic in `scoring/`
-3. Create SageMaker pipeline in `pipeline/`
-4. Generate labeled synthetic trips in `synthetic/` for testing before real data accumulates
+- 📊 **Visualization:** Grafana dashboards for risk trends
+- 🤖 **ML Model:** Predict accident likelihood from features
+- 💰 **Premium Calculation:** Map risk scores to insurance rates
+- 📱 **Driver Feedback:** Real-time alerts for risky behavior

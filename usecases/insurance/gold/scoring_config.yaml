@@ -1,0 +1,31 @@
+# Insurance Risk Scoring Configuration
+#
+# Weights for computing insurance risk score (0-100, lower is safer driver)
+# All weights must sum to 1.0
+
+weights:
+  hard_brakes: 0.25      # Penalty for hard braking (per 100 mi)
+  hard_accels: 0.20      # Penalty for hard acceleration (per 100 mi)
+  speeding: 0.30         # Penalty for time over 80 mph
+  night_driving: 0.15    # Penalty for night driving (10 PM - 6 AM)
+  highway_bonus: -0.10   # Bonus for highway driving (negative = safer)
+
+# Normalization parameters (converts raw values to 0-100 score)
+normalization:
+  hard_brakes_per_100mi:
+    max_value: 20        # >20 hard brakes per 100mi = worst score
+  hard_accels_per_100mi:
+    max_value: 20        # >20 hard accels per 100mi = worst score
+  pct_time_over_80mph:
+    max_value: 50        # >50% time speeding = worst score
+  night_minutes:
+    max_per_hour: 30     # >30 min/hour night driving = worst score
+  pct_highway:
+    baseline: 50         # 50% highway = neutral, more = bonus
+
+# Score interpretation
+# 0-20: Excellent (very safe driver)
+# 21-40: Good (safe driver)
+# 41-60: Average (typical driver)
+# 61-80: Below average (risky driver)
+# 81-100: Poor (very risky driver)
