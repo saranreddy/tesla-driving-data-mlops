@@ -4,15 +4,18 @@
 Exports drives and charges from the TeslaMate PostgreSQL database to Parquet files
 in S3, partitioned by date. Idempotent: safe to run multiple times for the same date.
 """
+
 import argparse
 import logging
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import pandas as pd
 import psycopg2
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 logging.basicConfig(
     level=logging.INFO,
@@ -66,18 +69,32 @@ def export_drives(
         EXTRACT(EPOCH FROM (d.end_date - d.start_date)) / 60 as duration_min,
         d.start_km,
         d.end_km,
-        d.start_rated_range_km - d.end_rated_range_km as kwh_used,
-        d.start_ideal_battery_range_km as start_battery_level,
-        d.end_ideal_battery_range_km as end_battery_level,
+        CASE
+            WHEN d.start_rated_range_km IS NOT NULL
+                AND d.end_rated_range_km IS NOT NULL
+                AND c.efficiency IS NOT NULL
+            THEN (d.start_rated_range_km - d.end_rated_range_km) * c.efficiency
+            ELSE NULL
+        END as kwh_used,
+        sp.battery_level as start_battery_level,
+        ep.battery_level as end_battery_level,
         d.outside_temp_avg,
         d.speed_max,
         CASE
-            WHEN d.distance > 0 THEN ((d.start_rated_range_km - d.end_rated_range_km) / d.distance) * 1000
+            WHEN d.distance > 0
+                AND d.start_rated_range_km IS NOT NULL
+                AND d.end_rated_range_km IS NOT NULL
+                AND c.efficiency IS NOT NULL
+            THEN ((d.start_rated_range_km - d.end_rated_range_km)
+                  * c.efficiency * 1000) / d.distance
             ELSE NULL
         END as efficiency
     FROM drives d
     LEFT JOIN addresses sa ON d.start_address_id = sa.id
     LEFT JOIN addresses ea ON d.end_address_id = ea.id
+    LEFT JOIN positions sp ON d.start_position_id = sp.id
+    LEFT JOIN positions ep ON d.end_position_id = ep.id
+    LEFT JOIN cars c ON d.car_id = c.id
     WHERE DATE(d.start_date) = %s
     ORDER BY d.start_date
     """
@@ -88,14 +105,61 @@ def export_drives(
         logger.info(f"No drives found for {date_str}")
         return 0
 
+    # Cast to exact Glue schema types
+    # bigint: id
+    df["id"] = df["id"].astype("int64")
+
+    # timestamp: start_date, end_date (convert to ms precision for Athena)
+    df["start_date"] = pd.to_datetime(df["start_date"]).dt.floor("ms")
+    df["end_date"] = pd.to_datetime(df["end_date"]).dt.floor("ms")
+
+    # string: start_address, end_address
+    df["start_address"] = df["start_address"].astype("string")
+    df["end_address"] = df["end_address"].astype("string")
+
+    # double: distance, duration_min, start_km, end_km, kwh_used,
+    #         outside_temp_avg, speed_max, efficiency
+    for col in [
+        "distance",
+        "duration_min",
+        "start_km",
+        "end_km",
+        "kwh_used",
+        "outside_temp_avg",
+        "speed_max",
+        "efficiency",
+    ]:
+        df[col] = df[col].astype("float64")
+
+    # int: start_battery_level, end_battery_level (nullable)
+    df["start_battery_level"] = df["start_battery_level"].astype("Int32")
+    df["end_battery_level"] = df["end_battery_level"].astype("Int32")
+
     s3_key = f"{s3_prefix}/date={date_str}/drives.parquet"
 
-    df.to_parquet(
-        f"s3://{s3_bucket}/{s3_key}",
-        engine="pyarrow",
-        compression="snappy",
-        index=False,
+    # Write with explicit schema to ensure int32 for nullable ints
+    schema = pa.schema(
+        [
+            ("id", pa.int64()),
+            ("start_date", pa.timestamp("ms")),
+            ("end_date", pa.timestamp("ms")),
+            ("start_address", pa.string()),
+            ("end_address", pa.string()),
+            ("distance", pa.float64()),
+            ("duration_min", pa.float64()),
+            ("start_km", pa.float64()),
+            ("end_km", pa.float64()),
+            ("kwh_used", pa.float64()),
+            ("start_battery_level", pa.int32()),
+            ("end_battery_level", pa.int32()),
+            ("outside_temp_avg", pa.float64()),
+            ("speed_max", pa.float64()),
+            ("efficiency", pa.float64()),
+        ]
     )
+
+    table = pa.Table.from_pandas(df, schema=schema)
+    pq.write_table(table, f"s3://{s3_bucket}/{s3_key}")
 
     logger.info(f"Exported {len(df)} drives to s3://{s3_bucket}/{s3_key}")
     return len(df)
@@ -125,8 +189,8 @@ def export_charges(
         c.end_date,
         a.display_name as address,
         c.charge_energy_added,
-        c.start_ideal_battery_range_km as start_battery_level,
-        c.end_ideal_battery_range_km as end_battery_level,
+        c.start_battery_level,
+        c.end_battery_level,
         EXTRACT(EPOCH FROM (c.end_date - c.start_date)) / 60 as duration_min,
         c.cost
     FROM charging_processes c
@@ -141,14 +205,45 @@ def export_charges(
         logger.info(f"No charges found for {date_str}")
         return 0
 
+    # Cast to exact Glue schema types
+    # bigint: id
+    df["id"] = df["id"].astype("int64")
+
+    # timestamp: start_date, end_date (convert to ms precision for Athena)
+    df["start_date"] = pd.to_datetime(df["start_date"]).dt.floor("ms")
+    df["end_date"] = pd.to_datetime(df["end_date"]).dt.floor("ms")
+
+    # string: address
+    df["address"] = df["address"].astype("string")
+
+    # double: charge_energy_added, duration_min, cost
+    df["charge_energy_added"] = df["charge_energy_added"].astype("float64")
+    df["duration_min"] = df["duration_min"].astype("float64")
+    df["cost"] = df["cost"].astype("float64")
+
+    # int: start_battery_level, end_battery_level (nullable)
+    df["start_battery_level"] = df["start_battery_level"].astype("Int32")
+    df["end_battery_level"] = df["end_battery_level"].astype("Int32")
+
     s3_key = f"{s3_prefix}/date={date_str}/charges.parquet"
 
-    df.to_parquet(
-        f"s3://{s3_bucket}/{s3_key}",
-        engine="pyarrow",
-        compression="snappy",
-        index=False,
+    # Write with explicit schema to ensure int32 for nullable ints
+    schema = pa.schema(
+        [
+            ("id", pa.int64()),
+            ("start_date", pa.timestamp("ms")),
+            ("end_date", pa.timestamp("ms")),
+            ("address", pa.string()),
+            ("charge_energy_added", pa.float64()),
+            ("start_battery_level", pa.int32()),
+            ("end_battery_level", pa.int32()),
+            ("duration_min", pa.float64()),
+            ("cost", pa.float64()),
+        ]
     )
+
+    table = pa.Table.from_pandas(df, schema=schema)
+    pq.write_table(table, f"s3://{s3_bucket}/{s3_key}")
 
     logger.info(f"Exported {len(df)} charges to s3://{s3_bucket}/{s3_key}")
     return len(df)
@@ -177,7 +272,7 @@ def main():
     if args.date:
         date_str = args.date
     else:
-        yesterday = datetime.utcnow().date() - timedelta(days=1)
+        yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
         date_str = yesterday.strftime("%Y-%m-%d")
 
     db_password = args.db_password or os.environ.get("POSTGRES_PASSWORD")
