@@ -71,11 +71,12 @@ def test_export_drives_success(mock_db_connection, mock_drives_df):
             count = export_drives(mock_db_connection, "2026-10-07", "test-bucket")
 
             assert count == 2
-            mock_to_parquet.assert_called_once()
-            call_args = mock_to_parquet.call_args
+            mock_write.assert_called_once()
+            call_args = mock_write.call_args
+            # First arg is table, second is path
             assert (
-                "s3://test-bucket/raw/drives/date=2026-10-07/drives.parquet"
-                in call_args[0]
+                "s3://test-bucket/bronze/drives/date=2026-10-07/drives.parquet"
+                in str(call_args)
             )
 
 
@@ -106,11 +107,12 @@ def test_export_charges_success(mock_db_connection, mock_charges_df):
             count = export_charges(mock_db_connection, "2026-10-07", "test-bucket")
 
             assert count == 1
-            mock_to_parquet.assert_called_once()
-            call_args = mock_to_parquet.call_args
+            mock_write.assert_called_once()
+            call_args = mock_write.call_args
+            # First arg is table, second is path
             assert (
-                "s3://test-bucket/raw/charges/date=2026-10-07/charges.parquet"
-                in call_args[0]
+                "s3://test-bucket/bronze/charges/date=2026-10-07/charges.parquet"
+                in str(call_args)
             )
 
 
@@ -142,10 +144,10 @@ def test_export_drives_custom_prefix(mock_db_connection, mock_drives_df):
                 mock_db_connection, "2026-10-07", "test-bucket", s3_prefix="custom/path"
             )
 
-            call_args = mock_to_parquet.call_args
+            call_args = mock_write.call_args
             assert (
                 "s3://test-bucket/custom/path/date=2026-10-07/drives.parquet"
-                in call_args[0]
+                in str(call_args)
             )
 
 
