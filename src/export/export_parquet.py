@@ -69,13 +69,24 @@ def export_drives(
         EXTRACT(EPOCH FROM (d.end_date - d.start_date)) / 60 as duration_min,
         d.start_km,
         d.end_km,
-        d.start_rated_range_km - d.end_rated_range_km as kwh_used,
+        CASE
+            WHEN d.start_rated_range_km IS NOT NULL
+                AND d.end_rated_range_km IS NOT NULL
+                AND c.efficiency IS NOT NULL
+            THEN (d.start_rated_range_km - d.end_rated_range_km) * c.efficiency
+            ELSE NULL
+        END as kwh_used,
         sp.battery_level as start_battery_level,
         ep.battery_level as end_battery_level,
         d.outside_temp_avg,
         d.speed_max,
         CASE
-            WHEN d.distance > 0 THEN ((d.start_rated_range_km - d.end_rated_range_km) / d.distance) * 1000
+            WHEN d.distance > 0
+                AND d.start_rated_range_km IS NOT NULL
+                AND d.end_rated_range_km IS NOT NULL
+                AND c.efficiency IS NOT NULL
+            THEN ((d.start_rated_range_km - d.end_rated_range_km)
+                  * c.efficiency * 1000) / d.distance
             ELSE NULL
         END as efficiency
     FROM drives d
@@ -83,6 +94,7 @@ def export_drives(
     LEFT JOIN addresses ea ON d.end_address_id = ea.id
     LEFT JOIN positions sp ON d.start_position_id = sp.id
     LEFT JOIN positions ep ON d.end_position_id = ep.id
+    LEFT JOIN cars c ON d.car_id = c.id
     WHERE DATE(d.start_date) = %s
     ORDER BY d.start_date
     """
@@ -105,7 +117,8 @@ def export_drives(
     df["start_address"] = df["start_address"].astype("string")
     df["end_address"] = df["end_address"].astype("string")
 
-    # double: distance, duration_min, start_km, end_km, kwh_used, outside_temp_avg, speed_max, efficiency
+    # double: distance, duration_min, start_km, end_km, kwh_used,
+    #         outside_temp_avg, speed_max, efficiency
     for col in [
         "distance",
         "duration_min",

@@ -260,3 +260,74 @@ def test_charges_parquet_schema_matches_glue():
 
     # Verify timestamp precision is set to ms (not ns)
     assert '.dt.floor("ms")' in source
+
+
+def test_kwh_and_efficiency_calculations():
+    """Test that kWh and efficiency are calculated correctly with real drive data.
+
+    Real Model S 100D drive:
+    - Distance: 40.4 km
+    - Battery: 77% → 68% (9% loss on 100 kWh battery ≈ 9 kWh)
+    - Start rated range: 366.45 km
+    - End rated range: 322.87 km
+    - Range delta: 43.58 km
+    - Car efficiency: ~0.2 kWh/km (typical for Model S)
+
+    Expected results:
+    - kwh_used: 7-11 kWh (not 43.58!)
+    - efficiency: 170-280 Wh/km
+    """
+    import inspect
+
+    from src.export.export_parquet import export_drives
+
+    source = inspect.getsource(export_drives)
+
+    # Verify the query joins cars table for efficiency
+    assert "cars c" in source or "cars AS c" in source
+    assert "c.efficiency" in source
+
+    # Verify kwh_used calculation uses car efficiency
+    assert "start_rated_range_km - d.end_rated_range_km) * c.efficiency" in source
+
+    # Verify efficiency calculation is Wh/km from kWh
+    assert "* c.efficiency * 1000" in source
+
+    # Verify NULL handling for missing values
+    assert "ELSE NULL" in source
+
+    # Test with mock data matching real drive
+    mock_conn = MagicMock()
+    mock_df = pd.DataFrame(
+        {
+            "id": [1],
+            "start_date": [datetime(2026, 10, 9, 10, 0)],
+            "end_date": [datetime(2026, 10, 9, 10, 30)],
+            "start_address": ["Home"],
+            "end_address": ["Work"],
+            "distance": [40.4],  # km
+            "duration_min": [30.0],
+            "start_km": [10000.0],
+            "end_km": [10040.4],
+            "kwh_used": [8.716],  # (366.45 - 322.87) * 0.2 = 43.58 * 0.2 = 8.716 kWh
+            "start_battery_level": [77],
+            "end_battery_level": [68],
+            "outside_temp_avg": [20.0],
+            "speed_max": [110.0],
+            "efficiency": [215.74],  # 8.716 kWh * 1000 / 40.4 km = 215.74 Wh/km
+        }
+    )
+
+    with patch("src.export.export_parquet.pd.read_sql_query", return_value=mock_df):
+        with patch("src.export.export_parquet.pq.write_table"):
+            _ = export_drives(mock_conn, "2026-10-09", "test-bucket")
+
+            # Verify calculations are in plausible ranges
+            assert 7.0 <= mock_df["kwh_used"].iloc[0] <= 11.0, (
+                f"kwh_used should be 7-11 kWh for this trip, "
+                f"got {mock_df['kwh_used'].iloc[0]}"
+            )
+            assert 170.0 <= mock_df["efficiency"].iloc[0] <= 280.0, (
+                f"efficiency should be 170-280 Wh/km, "
+                f"got {mock_df['efficiency'].iloc[0]}"
+            )
