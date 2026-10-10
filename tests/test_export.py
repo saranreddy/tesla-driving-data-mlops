@@ -135,9 +135,8 @@ def test_export_drives_custom_prefix(mock_db_connection, mock_drives_df):
             )
 
             call_args = mock_write.call_args
-            assert (
-                "s3://test-bucket/custom/path/date=2026-10-07/drives.parquet"
-                in str(call_args)
+            assert "s3://test-bucket/custom/path/date=2026-10-07/drives.parquet" in str(
+                call_args
             )
 
 
