@@ -14,6 +14,8 @@ from typing import Optional
 
 import pandas as pd
 import psycopg2
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 logging.basicConfig(
     level=logging.INFO,
@@ -123,9 +125,6 @@ def export_drives(
     s3_key = f"{s3_prefix}/date={date_str}/drives.parquet"
 
     # Write with explicit schema to ensure int32 for nullable ints
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-
     schema = pa.schema(
         [
             ("id", pa.int64()),
@@ -216,9 +215,6 @@ def export_charges(
     s3_key = f"{s3_prefix}/date={date_str}/charges.parquet"
 
     # Write with explicit schema to ensure int32 for nullable ints
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-
     schema = pa.schema(
         [
             ("id", pa.int64()),
