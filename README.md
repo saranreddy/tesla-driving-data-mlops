@@ -99,13 +99,13 @@ git clone https://github.com/saranreddy/tesla-driving-data-mlops.git
 cd tesla-driving-data-mlops
 
 # Review the structure
-ls -la platform/infra/
+ls -la teslamate_platform/infra/
 ```
 
 ### Step 2: Provision AWS Infrastructure with Terraform
 
 ```bash
-cd platform/infra
+cd teslamate_platform/infra
 
 # Initialize Terraform
 terraform init
@@ -151,7 +151,7 @@ TeslaMate has no public-facing ports. Access the web UI via AWS Systems Manager 
 
 ```bash
 # Get the instance ID from Terraform output
-INSTANCE_ID=$(cd platform/infra && terraform output -raw instance_id)
+INSTANCE_ID=$(cd teslamate_platform/infra && terraform output -raw instance_id)
 
 # Forward TeslaMate UI (port 4000) to localhost:4000
 aws ssm start-session \
@@ -196,7 +196,7 @@ TeslaMate includes pre-built Grafana dashboards for visualizing your driving dat
 **In a new terminal**, forward Grafana (port 3000):
 
 ```bash
-INSTANCE_ID=$(cd platform/infra && terraform output -raw instance_id)
+INSTANCE_ID=$(cd teslamate_platform/infra && terraform output -raw instance_id)
 
 aws ssm start-session \
   --target $INSTANCE_ID \
@@ -247,7 +247,7 @@ exit
 Check S3 for exported Parquet files:
 
 ```bash
-S3_BUCKET=$(cd platform/infra && terraform output -raw s3_bucket_name)
+S3_BUCKET=$(cd teslamate_platform/infra && terraform output -raw s3_bucket_name)
 
 aws s3 ls s3://$S3_BUCKET/raw/drives/ --recursive
 aws s3 ls s3://$S3_BUCKET/raw/charges/ --recursive
@@ -281,8 +281,8 @@ ORDER BY date DESC;
 **Via AWS CLI:**
 
 ```bash
-DATABASE=$(cd platform/infra && terraform output -raw glue_database_name)
-WORKGROUP=$(cd platform/infra && terraform output -raw athena_workgroup)
+DATABASE=$(cd teslamate_platform/infra && terraform output -raw glue_database_name)
+WORKGROUP=$(cd teslamate_platform/infra && terraform output -raw athena_workgroup)
 
 aws athena start-query-execution \
   --query-string "SELECT * FROM drives LIMIT 10;" \
@@ -333,7 +333,7 @@ The Terraform lifecycle policy protects the live instance from accidental replac
 aws s3 ls s3://$S3_BUCKET/backups/
 
 # 2. Manually trigger replacement (will destroy and recreate the instance)
-cd platform/infra
+cd teslamate_platform/infra
 terraform apply -replace=aws_instance.teslamate
 
 # 3. Restore from the most recent backup if needed (see above)
@@ -347,7 +347,7 @@ To avoid ongoing charges, destroy the infrastructure:
 
 ```bash
 # Destroy everything (deletes all data)
-cd platform/infra
+cd teslamate_platform/infra
 terraform destroy  # Type 'yes' when prompted
 ```
 
@@ -359,58 +359,58 @@ terraform destroy  # Type 'yes' when prompted
 
 ```
 .
-├── platform/                       # Shared infrastructure and data platform
-│   ├── infra/                      # Terraform infrastructure (CRITICAL: cd to this path for terraform commands)
-│   │   ├── main.tf                 # Provider and Terraform config
-│   │   ├── variables.tf            # Input variables
-│   │   ├── data.tf                 # Data sources (AMI lookup)
-│   │   ├── s3.tf                   # S3 bucket with lifecycle policies
-│   │   ├── iam.tf                  # IAM roles for EC2 instance
-│   │   ├── secrets.tf              # Random passwords and SSM parameters
-│   │   ├── security_group.tf       # Security group (no public inbound)
-│   │   ├── ec2.tf                  # EC2 instance and EBS snapshot policy
-│   │   ├── glue.tf                 # Glue Data Catalog and Athena
-│   │   ├── user_data.sh            # EC2 user data (installs TeslaMate)
-│   │   ├── outputs.tf              # Terraform outputs
-│   │   └── terraform.tfvars.example # Example variable values
-│   └── export/                     # Nightly export and backup scripts
+├── teslamate_platform/                 # Shared infrastructure and data platform
+│   ├── infra/                          # Terraform infrastructure (CRITICAL: cd to this path for terraform commands)
+│   │   ├── main.tf                     # Provider and Terraform config
+│   │   ├── variables.tf                # Input variables
+│   │   ├── data.tf                     # Data sources (AMI lookup)
+│   │   ├── s3.tf                       # S3 bucket with lifecycle policies
+│   │   ├── iam.tf                      # IAM roles for EC2 instance
+│   │   ├── secrets.tf                  # Random passwords and SSM parameters
+│   │   ├── security_group.tf           # Security group (no public inbound)
+│   │   ├── ec2.tf                      # EC2 instance and EBS snapshot policy
+│   │   ├── glue.tf                     # Glue Data Catalog and Athena
+│   │   ├── user_data.sh                # EC2 user data (installs TeslaMate)
+│   │   ├── outputs.tf                  # Terraform outputs
+│   │   └── terraform.tfvars.example    # Example variable values
+│   └── export/                         # Nightly export and backup scripts
 │       ├── __init__.py
-│       └── export_parquet.py       # Python script for S3 Parquet export
-├── usecases/                       # Use case modules (isolated, read from platform)
-│   ├── _template/                  # Template for new modules
-│   │   └── README.md               # Module structure and rules
-│   └── insurance/                  # Insurance risk scoring (skeleton only)
-│       ├── README.md               # Use case overview and limits
-│       ├── features/               # Feature extraction
+│       └── export_parquet.py           # Python script for S3 Parquet export
+├── usecases/                           # Use case modules (isolated, read from platform)
+│   ├── _template/                      # Template for new modules
+│   │   └── README.md                   # Module structure and rules
+│   └── insurance/                      # Insurance risk scoring (skeleton only)
+│       ├── README.md                   # Use case overview and limits
+│       ├── features/                   # Feature extraction
 │       │   └── README.md
-│       ├── scoring/                # Weighted scoring logic
+│       ├── scoring/                    # Weighted scoring logic
 │       │   └── README.md
-│       ├── pipeline/               # SageMaker pipeline orchestration
+│       ├── pipeline/                   # SageMaker pipeline orchestration
 │       │   └── README.md
-│       └── synthetic/              # Synthetic trip generation
+│       └── synthetic/                  # Synthetic trip generation
 │           └── README.md
 ├── tests/
 │   ├── __init__.py
-│   ├── conftest.py                 # Pytest configuration
-│   └── test_export.py              # Unit tests for export script
+│   ├── conftest.py                     # Pytest configuration
+│   └── test_export.py                  # Unit tests for export script
 ├── docs/
-│   ├── arch-current.png            # Current architecture diagram
-│   ├── arch-future.png             # Planned architecture (with insurance module)
-│   ├── architecture.py             # Architecture diagram source (legacy)
-│   └── architecture.png            # Generated diagram (legacy)
+│   ├── arch-current.png                # Current architecture diagram
+│   ├── arch-future.png                 # Planned architecture (with insurance module)
+│   ├── architecture.py                 # Architecture diagram source (legacy)
+│   └── architecture.png                # Generated diagram (legacy)
 ├── .github/
 │   └── workflows/
-│       └── ci.yml                  # GitHub Actions CI
+│       └── ci.yml                      # GitHub Actions CI
 ├── .gitignore
 ├── LICENSE
 ├── README.md
-├── requirements.txt                # Python dependencies
-└── requirements-dev.txt            # Development dependencies
+├── requirements.txt                    # Python dependencies
+└── requirements-dev.txt                # Development dependencies
 ```
 
-**CRITICAL PATH CHANGE:** All Terraform commands must now be run from `platform/infra/`:
+**CRITICAL PATH CHANGE:** All Terraform commands must now be run from `teslamate_platform/infra/`:
 ```bash
-cd platform/infra
+cd teslamate_platform/infra
 terraform init
 terraform plan
 terraform apply
@@ -572,7 +572,7 @@ Reduce monthly costs while maintaining continuous data collection:
 
 ### Terraform Variables
 
-Customize in `platform/infra/terraform.tfvars`:
+Customize in `teslamate_platform/infra/terraform.tfvars`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -625,7 +625,7 @@ sudo systemctl restart teslamate-export.timer
 
 **Fix:** Ensure the same region everywhere:
 - AWS CLI: `aws configure get region`
-- Terraform: `grep aws_region platform/infra/terraform.tfvars`
+- Terraform: `grep aws_region teslamate_platform/infra/terraform.tfvars`
 - All AWS CLI commands: add `--region us-east-1` (or your region)
 
 ### 2. Session Manager Plugin Not Installed
@@ -660,9 +660,9 @@ TeslaMate takes ~2-3 minutes to start after instance boot. If containers are not
 
 **Error:** `No AMI matching filters` during `terraform plan` or `apply`.
 
-**Fix:** The AMI filter in `platform/infra/data.tf` looks for Ubuntu 24.04 images matching your instance type architecture (arm64 for t4g.*, x86_64 for t3.*). If unavailable in your region:
+**Fix:** The AMI filter in `teslamate_platform/infra/data.tf` looks for Ubuntu 24.04 images matching your instance type architecture (arm64 for t4g.*, x86_64 for t3.*). If unavailable in your region:
 1. Search for Ubuntu AMIs: `aws ec2 describe-images --owners 099720109477 --filters "Name=name,Values=ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-*-server-*" --region YOUR_REGION`
-2. Update `platform/infra/data.tf` with a valid AMI name pattern or AMI ID
+2. Update `teslamate_platform/infra/data.tf` with a valid AMI name pattern or AMI ID
 
 ### 6. High S3 Costs
 
@@ -671,7 +671,7 @@ TeslaMate takes ~2-3 minutes to start after instance boot. If containers are not
 **Fix:**
 - Check lifecycle policies are active: `aws s3api get-bucket-lifecycle-configuration --bucket $S3_BUCKET`
 - Review S3 storage usage: `aws s3 ls s3://$S3_BUCKET/ --recursive --human-readable --summarize`
-- Reduce backup retention: Update `backup_retention_days` in `platform/infra/terraform.tfvars` and `terraform apply`
+- Reduce backup retention: Update `backup_retention_days` in `teslamate_platform/infra/terraform.tfvars` and `terraform apply`
 
 ### 7. Out of Memory (OOM) or Slow Grafana Dashboards
 
@@ -783,17 +783,17 @@ pip install -r requirements-dev.txt
 pytest tests/ -v --cov=src --cov-report=term-missing
 
 # Lint
-flake8 platform/ tests/ --max-line-length=120
+flake8 teslamate_platform/ tests/ --max-line-length=120
 
 # Format
-black platform/ tests/
-isort platform/ tests/
+black teslamate_platform/ tests/
+isort teslamate_platform/ tests/
 ```
 
 ### Validating Terraform Locally
 
 ```bash
-cd platform/infra
+cd teslamate_platform/infra
 
 # Format check
 terraform fmt -check -recursive
@@ -881,7 +881,7 @@ To switch Tesla accounts (e.g., for a second vehicle):
 
 ### Changing EC2 Instance Size
 
-Edit `platform/infra/terraform.tfvars`:
+Edit `teslamate_platform/infra/terraform.tfvars`:
 
 ```hcl
 instance_type = "t4g.medium"  # Double the RAM for larger databases
@@ -890,7 +890,7 @@ instance_type = "t4g.medium"  # Double the RAM for larger databases
 Then apply:
 
 ```bash
-cd platform/infra
+cd teslamate_platform/infra
 terraform apply
 ```
 
@@ -898,9 +898,9 @@ terraform apply
 
 ### Adding More Glue Tables
 
-To export and query additional TeslaMate tables (e.g., `positions`, `settings`), edit `platform/infra/glue.tf` and add a new `aws_glue_catalog_table` resource. Follow the pattern for `drives` and `charges` tables.
+To export and query additional TeslaMate tables (e.g., `positions`, `settings`), edit `teslamate_platform/infra/glue.tf` and add a new `aws_glue_catalog_table` resource. Follow the pattern for `drives` and `charges` tables.
 
-Update `platform/export/export_parquet.py` to export the new table to S3.
+Update `teslamate_platform/export/export_parquet.py` to export the new table to S3.
 
 ## Contributing
 
@@ -948,7 +948,7 @@ A: For a robust seasonal model, collect at least 3-6 months of data across diffe
 A: Fleet Telemetry setup (phase 2) is planned but not implemented. You can add it yourself by following Tesla's [Fleet Telemetry docs](https://developer.tesla.com/docs/fleet-api#fleet-telemetry). The architecture diagram shows where it fits.
 
 **Q: Should I use t3.micro (x86_64) or t4g.micro (ARM/Graviton)?**  
-A: **Default is t3.micro** (x86_64) because it's free-tier eligible for all AWS account types (legacy free tier and new free plan). After free tier, t4g.micro (ARM) costs 25% less ($6.20 vs $8.30/month) for the same 1 GB RAM. TeslaMate publishes official ARM64 Docker images, so there's no compatibility penalty. To switch: set `instance_type = "t4g.micro"` in `platform/infra/terraform.tfvars` and run `terraform apply`—the AMI automatically switches to arm64 (Ubuntu 24.04 LTS).
+A: **Default is t3.micro** (x86_64) because it's free-tier eligible for all AWS account types (legacy free tier and new free plan). After free tier, t4g.micro (ARM) costs 25% less ($6.20 vs $8.30/month) for the same 1 GB RAM. TeslaMate publishes official ARM64 Docker images, so there's no compatibility penalty. To switch: set `instance_type = "t4g.micro"` in `teslamate_platform/infra/terraform.tfvars` and run `terraform apply`—the AMI automatically switches to arm64 (Ubuntu 24.04 LTS).
 
 **Q: Does this work with Tesla's new API changes?**  
 A: As of October 2026, TeslaMate supports Tesla's latest OAuth flow and fleet API. If Tesla deprecates older APIs, the TeslaMate community typically updates within days. Update your Docker images regularly: `docker compose pull && docker compose up -d`.
