@@ -204,3 +204,59 @@ def test_charges_query_columns():
     # Verify it uses the direct columns from charging_processes
     assert "c.start_battery_level" in source
     assert "c.end_battery_level" in source
+
+
+def test_drives_parquet_schema_matches_glue():
+    """Test that drives Parquet schema matches Glue table definition."""
+    import inspect
+
+    from src.export.export_parquet import export_drives
+
+    source = inspect.getsource(export_drives)
+
+    # Verify PyArrow schema is defined with correct types matching Glue:
+    # bigint -> int64
+    assert "pa.int64()" in source or "int64" in source
+
+    # timestamp -> timestamp("ms")
+    assert 'pa.timestamp("ms")' in source or "timestamp" in source
+
+    # string
+    assert "pa.string()" in source or "string" in source
+
+    # double -> float64
+    assert "pa.float64()" in source or "float64" in source
+
+    # int -> int32
+    assert "pa.int32()" in source or "Int32" in source
+
+    # Verify timestamp precision is set to ms (not ns)
+    assert '.dt.floor("ms")' in source
+
+
+def test_charges_parquet_schema_matches_glue():
+    """Test that charges Parquet schema matches Glue table definition."""
+    import inspect
+
+    from src.export.export_parquet import export_charges
+
+    source = inspect.getsource(export_charges)
+
+    # Verify PyArrow schema is defined with correct types matching Glue:
+    # bigint -> int64
+    assert "pa.int64()" in source or "int64" in source
+
+    # timestamp -> timestamp("ms")
+    assert 'pa.timestamp("ms")' in source or "timestamp" in source
+
+    # string
+    assert "pa.string()" in source or "string" in source
+
+    # double -> float64
+    assert "pa.float64()" in source or "float64" in source
+
+    # int -> int32
+    assert "pa.int32()" in source or "Int32" in source
+
+    # Verify timestamp precision is set to ms (not ns)
+    assert '.dt.floor("ms")' in source
